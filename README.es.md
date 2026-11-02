@@ -20,7 +20,8 @@ Introduces los docentes, los grupos y las asignaciones. La aplicación rellena s
 - **Cambios a mano:** arrastrar, intercambiar horas, bloquear. El panel «Problemas» muestra lo que no se cumple.
 - **Impresión** por docente y por grupo, con archivo de todas las impresiones.
 - **Varios centros**, cada uno con sus docentes y su horario.
-- **Guardado automático** y copias de seguridad.
+- **Varios horarios en una ejecución:** encuentra 2–4 horarios distintos e igual de buenos y te quedas con el que prefieras.
+- **Guardado automático** y copias de seguridad, con recuperación del último o penúltimo guardado.
 - **Cinco idiomas:** Ελληνικά, English, Français, Deutsch, Español. Se elige en el primer inicio y se cambia en Ajustes.
 
 ## Instalación

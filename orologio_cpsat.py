@@ -291,6 +291,8 @@ DAY_SHORT = ['Δευ', 'Τρί', 'Τετ', 'Πέμ', 'Παρ', 'Σάβ']
 
 # ---- Γλώσσα μηνυμάτων (data['_lang'] από την εφαρμογή) ----
 LANG = 'el'
+ALT_MIN = 6
+ALT_FRAC = 0.12   # πόσο διαφορετικά (μέρος των θέσεων) πρέπει να είναι τα εναλλακτικά προγράμματα
 MSG = {
  "NO_SLOT": {
   "el": "καμία επιτρεπτή ώρα (κωλύματα / ζώνες)",
@@ -368,6 +370,13 @@ MSG = {
   "fr": "Aucune solution trouvée dans le temps imparti. Essaie avec plus de temps.",
   "de": "In der vorgegebenen Zeit keine Lösung gefunden. Versuche es mit mehr Zeit.",
   "es": "No se encontró solución en el tiempo dado. Prueba con más tiempo."
+ },
+ "ALT": {
+  "el": "Εναλλακτικό πρόγραμμα {0} από {1}…",
+  "en": "Alternative timetable {0} of {1}…",
+  "fr": "Emploi du temps alternatif {0} sur {1}…",
+  "de": "Alternativer Plan {0} von {1}…",
+  "es": "Horario alternativo {0} de {1}…"
  }
 }
 
@@ -690,7 +699,11 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
         return sum(ln for (a, ln, xs, p) in units if not val(p))
 
     t0 = time.time()
-    phase = {'from': 0.0, 'to': 1.0, 'text': ''}
+    phase = {'from': 0.0, 'to': 1.0, 'text': '', 'show': True}
+    n_alts = max(1, min(5, int(data.get('_alts') or 1)))
+    total_seconds = seconds
+    if n_alts > 1:   # το 55% του χρόνου για την καλύτερη λύση, το υπόλοιπο για τις εναλλακτικές
+        seconds = seconds * 0.55
 
     class CB(cp_model.CpSolverSolutionCallback):
         def __init__(self, with_obj):
@@ -704,14 +717,16 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
                 return
             if progress and time.time() - self.last > 0.7:
                 self.last = time.time()
-                frac = min(1.0, (time.time() - t0) / max(1, seconds))
+                frac = min(1.0, (time.time() - t0) / max(1, total_seconds))
                 progress({'progress': frac, 'text': phase['text'],
                           'best': {'hard': 0, 'soft': int(self.ObjectiveValue()) if self.with_obj else 0, 'missing': missing_from(self.BooleanValue)},
-                          'schedule': schedule_from(self.BooleanValue)})
+                          'schedule': schedule_from(self.BooleanValue) if phase['show'] else None})
 
-    def run(model, secs, with_obj):
+    def run(model, secs, with_obj, repair=False):
         sv = cp_model.CpSolver()
         sv.parameters.max_time_in_seconds = max(1.0, float(secs))
+        if repair:   # ξεκινά από την προηγούμενη λύση (hint) και τη «διορθώνει»
+            sv.parameters.repair_hint = True
         sv.parameters.num_workers = 8
         if stopper is not None:
             solve.current = sv
@@ -783,6 +798,69 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
             def ObjectiveValue(self):
                 return 0
         solver = _V(best_val)
+    def find_alternatives(main):
+        # Άλλα προγράμματα με ΟΛΕΣ τις ίδιες ώρες, αισθητά διαφορετικά από τα προηγούμενα (ALT_FRAC των θέσεων).
+        # Το καθένα ξαναστήνει τις ώρες κάποιων εκπαιδευτικών και βελτιστοποιείται με τα ίδια κριτήρια ποιότητας.
+        found = []
+        # θέση = (ανάθεση, διάρκεια, ώρα έναρξης)· κομμάτια της ίδιας ανάθεσης είναι ισοδύναμα,
+        # οπότε η διαφορά μετριέται στις θέσεις του προγράμματος, όχι στις μεταβλητές
+        pos = {}
+        for (a, ln, xs, p) in units:
+            for st, v in xs.items():
+                pos.setdefault((a['id'], ln, st), []).append(v)
+
+        def chosen_pos(val):
+            return [k for k, vs in pos.items() if any(val(v) for v in vs)]
+        chosen = [chosen_pos(main.BooleanValue)]
+        placed_main = total_free - missing_from(main.BooleanValue)
+        obj_main = int(main.ObjectiveValue()) if soft else 0
+        min_diff = max(ALT_MIN, int(round(len(units) * ALT_FRAC)))
+        import random
+        rng = random.Random(7)
+        for k in range(2, n_alts + 1):
+            left = total_seconds - (time.time() - t0)
+            if left < 3 or (stopper and stopper()):
+                break
+            slot_end = time.time() + left / (n_alts - k + 1)
+            base_val = rng.choice([main.BooleanValue] + [f['val'] for f in found])
+            phase['text'] = _('ALT', k, n_alts)
+            phase['show'] = False
+            got = None
+            tries = 0
+            while time.time() < slot_end - 1 and not (stopper and stopper()):
+                tries += 1
+                # «γειτονιά»: κρατά το μεγαλύτερο μέρος του καλύτερου προγράμματος και ξαναστήνει ελεύθερα
+                # τις ώρες κάποιων εκπαιδευτικών (διαφορετικούς κάθε φορά)
+                tids = sorted({a['t'] for (a, ln, xs, p) in units})
+                free_t = set(rng.sample(tids, max(2, int(len(tids) * min(0.9, 0.35 + 0.1 * tries)))))
+                pa = m.Clone()
+                pa.Add(placed_sum >= placed_main)
+                for (a, ln, xs, p) in units:
+                    if a['t'] in free_t:
+                        continue
+                    for st, v in xs.items():
+                        if base_val(v):
+                            pa.Add(v == 1)
+                for prev in chosen:
+                    pa.Add(sum(sum(pos[q]) for q in prev) <= len(prev) - min_diff)
+                if soft:
+                    pa.Minimize(sum(soft))
+                hint_from(pa, base_val)
+                sta, sva = run(pa, max(1.0, min(slot_end - time.time(), (slot_end - time.time()) * 0.6 + 2)), bool(soft))
+                if sta in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                    vals = {v.Index(): sva.BooleanValue(v) for (a, ln, xs, p) in units for v in list(xs.values()) + [p]}
+                    got = ((lambda vv: (lambda v: vv[v.Index()]))(vals), int(sva.ObjectiveValue()) if soft else 0)
+                    break
+            if got is None:
+                break
+            chosen.append(chosen_pos(got[0]))
+            found.append({'val': got[0], 'schedule': schedule_from(got[0]),
+                          'summary': {'hard': 0, 'soft': got[1], 'missing': missing_from(got[0])}})
+        phase['show'] = True
+        for f in found:
+            f.pop('val', None)
+        return found
+
     elapsed = time.time() - t0
     if solver is not None:
         for (a, ln, xs, p) in units:
@@ -792,8 +870,12 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
         for u in unplaceable:
             a = by_id[u['aid']]
             msgs.append(_('UNPLACED', tname(a['t']), a['label'], u['len'], u['why']))
+        alternatives = []
+        if n_alts > 1 and not (stopper and stopper()):
+            alternatives = find_alternatives(solver)
+            elapsed = time.time() - t0
         return {'ok': True, 'engine': 'OR-Tools', 'schedule': schedule_from(solver.BooleanValue), 'seconds': elapsed,
-                'optimal': status == cp_model.OPTIMAL,
+                'optimal': status == cp_model.OPTIMAL, 'alternatives': alternatives,
                 'summary': {'hard': 0, 'soft': int(solver.ObjectiveValue()) if soft else 0, 'missing': sum(u['len'] for u in unplaceable)},
                 'unplaceable': unplaceable, 'messages': msgs}
     if status == cp_model.INFEASIBLE:

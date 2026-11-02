@@ -8,10 +8,11 @@ import os
 import subprocess
 import sys
 import threading
+import time
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 HTML = os.path.join(APP_DIR, 'Ωρολόγιο.html')
-VERSION = '2.2'
+VERSION = '2.3'
 NEEDED = ['PySide6', 'ortools']
 
 
@@ -274,6 +275,29 @@ def run_app():
             pass
         return {'list': [], 'cur': None}
 
+    POINT_NAME = 'σημείο-επαναφοράς-%d.json'
+
+    def rotate_points(new_text):
+        # Αυτόματα σημεία επαναφοράς: πριν γραφτεί νέα αποθήκευση, η προηγούμενη κρατιέται.
+        # Κρατιούνται οι 2 τελευταίες, με απόσταση τουλάχιστον 2 λεπτά (η αυτόματη αποθήκευση γίνεται συνέχεια).
+        try:
+            cur = data_file()
+            if not os.path.exists(cur):
+                return
+            p1 = os.path.join(school_dir(), POINT_NAME % 1)
+            p2 = os.path.join(school_dir(), POINT_NAME % 2)
+            if os.path.exists(p1) and time.time() - os.path.getmtime(p1) < 120:
+                return
+            with open(cur, encoding='utf-8') as f:
+                old = f.read()
+            if old == new_text:
+                return
+            if os.path.exists(p1):
+                os.replace(p1, p2)
+            write_atomic(p1, old)
+        except Exception:
+            pass
+
     def write_atomic(path, text):
         tmp = path + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
@@ -377,10 +401,51 @@ def run_app():
         def saveData(self, text):
             try:
                 json.loads(text)
+                rotate_points(text)
                 write_atomic(data_file(), text)
                 return 'ok'
             except Exception as e:
                 return str(e)
+
+        # ---- ανάκτηση: οι 2 τελευταίες αποθηκεύσεις + τα αντίγραφα πριν από μεγάλες αλλαγές
+        @Slot(result=str)
+        def listRestore(self):
+            out = []
+
+            def info(path):
+                try:
+                    with open(path, encoding='utf-8') as f:
+                        d = json.load(f)
+                    return {'teachers': len(d.get('teachers') or []), 'classes': len(d.get('classes') or []), 'hours': len(d.get('schedule') or [])}
+                except Exception:
+                    return None
+            for slot in (1, 2):
+                pth = os.path.join(school_dir(), POINT_NAME % slot)
+                i = info(pth) if os.path.exists(pth) else None
+                if i:
+                    out.append(dict(i, file=POINT_NAME % slot, kind='auto', slot=slot, reason='', mtime=os.path.getmtime(pth)))
+            bdir = os.path.join(school_dir(), 'αντίγραφα')
+            if os.path.isdir(bdir):
+                names = sorted((f for f in os.listdir(bdir) if f.endswith('.json')), key=lambda f: os.path.getmtime(os.path.join(bdir, f)), reverse=True)
+                for f in names[:15]:
+                    pth = os.path.join(bdir, f)
+                    i = info(pth)
+                    if i:
+                        out.append(dict(i, file='αντίγραφα/' + f, kind='backup', slot=0, reason=f[:-5].split('_')[-1], mtime=os.path.getmtime(pth)))
+            out.sort(key=lambda x: -x['mtime'])
+            return json.dumps(out, ensure_ascii=False)
+
+        @Slot(str, result=str)
+        def readRestore(self, rel):
+            try:
+                base = os.path.realpath(school_dir())
+                pth = os.path.realpath(os.path.join(base, rel))
+                if not pth.startswith(base + os.sep):
+                    return ''
+                with open(pth, encoding='utf-8') as f:
+                    return f.read()
+            except Exception:
+                return ''
 
         @Slot(str, str, result=str)
         def backup(self, text, name):

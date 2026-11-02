@@ -1,4 +1,4 @@
-ΩΡΟΛΟΓΙΟ (STUNDENPLAN) — Version 2.2
+ΩΡΟΛΟΓΙΟ (STUNDENPLAN) — Version 2.3
 ===================================
 Wochenstundenplan der Lehrkräfte mit automatischem Füllen.
 
@@ -79,6 +79,9 @@ Speicherort: Dokumente\Ωρολόγιο\σχολεία\<Schule>\
    • Je mehr Zeit (60–300 Sek.), desto besser die Lösung.
    • Gleichmäßige Verteilung und „Gleiche Springstunden für alle“ stellst du in
      den Einstellungen ein.
+   • „Wie viele Pläne suchen“: bei 2–4 findet es verschiedene Pläne, alle mit
+     allen Stunden und fast gleicher Qualität. Über dem Raster siehst du sie
+     einzeln und klickst „Plan … behalten“ bei dem, der dir gefällt.
 
 
 4. ÄNDERUNGEN VON HAND
@@ -114,7 +117,16 @@ Komma = anderer Tag · B2B2 = Doppelstunde · A1A1A1 = Dreifachstunde.
 Die Klassen müssen schon (mit gleichem Namen) auf der Seite „Klassen“ existieren.
 
 
-7. UPDATES
+7. DATEN WIEDERHERSTELLEN
+-------------------------
+Die App behält automatisch die beiden letzten Speicherungen (mindestens
+2 Minuten auseinander) und eine Kopie vor jeder großen Änderung. Wenn etwas
+schiefgeht: Einstellungen & Datei → „Frühere Daten wiederherstellen…“ →
+letzte oder vorletzte Speicherung (oder eine Kopie) wählen → „Wiederherstellen“.
+Die aktuellen Daten werden vorher gesichert.
+
+
+8. UPDATES
 ----------
 Ersetze nur die Programmdateien. Der Datenordner bleibt unberührt; die neue
 Version aktualisiert die Daten selbst. Zur Sicherheit zusätzlich:

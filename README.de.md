@@ -20,7 +20,8 @@ Du gibst Lehrkräfte, Klassen und Zuweisungen ein. Die App füllt die ganze Woch
 - **Änderungen von Hand:** ziehen, Stunden tauschen, sperren. Das Feld „Probleme“ zeigt, was nicht eingehalten wird.
 - **Druck** nach Lehrkraft und nach Klasse, mit Archiv aller Ausdrucke.
 - **Mehrere Schulen**, jede mit eigenen Lehrkräften und eigenem Plan.
-- **Automatisches Speichern** und Sicherungen.
+- **Mehrere Pläne in einem Lauf:** es findet 2–4 verschiedene, gleich gute Pläne, und du behältst den, der dir gefällt.
+- **Automatisches Speichern** und Sicherungen, mit Wiederherstellung der letzten oder vorletzten Speicherung.
 - **Fünf Sprachen:** Ελληνικά, English, Français, Deutsch, Español. Auswahl beim ersten Start, änderbar in den Einstellungen.
 
 ## Installation

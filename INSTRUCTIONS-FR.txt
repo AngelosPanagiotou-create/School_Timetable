@@ -1,4 +1,4 @@
-ΩΡΟΛΟΓΙΟ (EMPLOI DU TEMPS) — version 2.2
+ΩΡΟΛΟΓΙΟ (EMPLOI DU TEMPS) — version 2.3
 =======================================
 Emploi du temps hebdomadaire des enseignants, avec remplissage automatique.
 
@@ -81,6 +81,9 @@ Emplacement des données : Documents\Ωρολόγιο\σχολεία\<école>\
    • Plus tu donnes de temps (60–300 s), meilleure est la solution.
    • La répartition équilibrée et les « Trous équitables pour tous » se règlent
      dans les Réglages.
+   • « Combien d’emplois du temps chercher » : avec 2 à 4, il trouve des emplois
+     du temps différents, tous complets et de qualité presque égale. Au-dessus de
+     la grille tu les vois un par un et cliques « Garder l’emploi du temps … ».
 
 
 4. MODIFICATIONS À LA MAIN
@@ -115,7 +118,16 @@ virgule = autre jour · B2B2 = heure double · A1A1A1 = heure triple.
 Les classes doivent déjà exister (avec le même nom) dans la page « Classes ».
 
 
-7. MISES À JOUR
+7. RÉCUPÉRATION DES DONNÉES
+---------------------------
+L’application garde automatiquement les deux derniers enregistrements (à au
+moins 2 minutes d’intervalle) et une copie avant chaque grosse modification.
+En cas de problème : Réglages & fichier → « Récupérer des données antérieures… »
+→ choisis le dernier ou l’avant-dernier enregistrement (ou une copie) →
+« Récupérer ». Les données actuelles sont d’abord sauvegardées.
+
+
+8. MISES À JOUR
 ---------------
 Remplace seulement les fichiers de l’application. Le dossier de données n’est
 pas touché ; la nouvelle version met à jour les données toute seule. Par

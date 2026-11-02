@@ -20,7 +20,8 @@ You enter the teachers, the classes and the assignments. The app fills in the wh
 - **Manual changes:** drag, swap periods, lock. The “Problems” panel shows what is not respected.
 - **Printing** by teacher and by class, with an archive of every print.
 - **Several schools**, each with its own teachers and timetable.
-- **Autosave** and backups.
+- **Several timetables in one run:** it finds 2–4 different, equally good timetables and you keep the one you prefer.
+- **Autosave** and backups, with recovery of the last or previous save.
 - **Five languages:** Ελληνικά, English, Français, Deutsch, Español. You choose at first start and can change it in Settings.
 
 ## Installation

@@ -1,4 +1,4 @@
-ΩΡΟΛΟΓΙΟ (HORARIO) — versión 2.2
+ΩΡΟΛΟΓΙΟ (HORARIO) — versión 2.3
 ================================
 Horario semanal del profesorado, con rellenado automático.
 
@@ -77,6 +77,9 @@ Dónde se guardan los datos: Documentos\Ωρολόγιο\σχολεία\<centro>
    • Cuanto más tiempo le des (60–300 s), mejor la solución.
    • El reparto equilibrado y los «Huecos equitativos para todos» se ajustan en
      Ajustes.
+   • «Cuántos horarios buscar»: con 2–4 encuentra horarios distintos, todos con
+     todas las horas y casi la misma calidad. Encima de la tabla los ves uno a uno
+     y pulsas «Quedarme con el horario …» en el que prefieras.
 
 
 4. CAMBIOS A MANO
@@ -111,7 +114,16 @@ coma = otro día · B2B2 = hora doble · A1A1A1 = hora triple.
 Los grupos deben existir ya (con el mismo nombre) en la página «Grupos».
 
 
-7. ACTUALIZACIONES
+7. RECUPERAR DATOS
+------------------
+La aplicación guarda automáticamente los dos últimos guardados (con al menos
+2 minutos de diferencia) y una copia antes de cada cambio grande. Si algo sale
+mal: Ajustes y archivo → «Recuperar datos anteriores…» → elige el último o el
+penúltimo guardado (o una copia) → «Recuperar». Los datos actuales se guardan
+antes en una copia.
+
+
+8. ACTUALIZACIONES
 ------------------
 Sustituye solo los archivos de la aplicación. La carpeta de datos no se toca;
 la nueva versión actualiza los datos sola. Para más seguridad:

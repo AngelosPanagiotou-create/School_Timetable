@@ -20,7 +20,8 @@ Tu saisis les enseignants, les classes et les affectations. L’application remp
 - **Modifications à la main :** glisser, échanger des heures, verrouiller. Le panneau « Problèmes » montre ce qui n’est pas respecté.
 - **Impression** par enseignant et par classe, avec un archivage de chaque impression.
 - **Plusieurs établissements**, chacun avec ses enseignants et son emploi du temps.
-- **Enregistrement automatique** et sauvegardes.
+- **Plusieurs emplois du temps en une fois :** il en trouve 2 à 4 différents, aussi bons, et tu gardes celui que tu préfères.
+- **Enregistrement automatique** et sauvegardes, avec récupération du dernier ou de l’avant-dernier enregistrement.
 - **Cinq langues :** Ελληνικά, English, Français, Deutsch, Español. Choix au premier démarrage, modifiable dans les Réglages.
 
 ## Installation

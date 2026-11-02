@@ -1,4 +1,4 @@
-ΩΡΟΛΟΓΙΟ (TIMETABLE) — version 2.2
+ΩΡΟΛΟΓΙΟ (TIMETABLE) — version 2.3
 ==================================
 Weekly teacher timetable with automatic filling.
 
@@ -76,6 +76,9 @@ Where data is stored: Documents\Ωρολόγιο\σχολεία\<school>\
 4. Timetable → "Auto-fill"
    • The more time you give (60–300 sec.), the better the solution.
    • Even spread and "Equal gaps for everyone" are set in Settings.
+   • "How many timetables to find": with 2–4 it finds different timetables, all
+     with every period placed and almost the same quality. Above the grid you see
+     them one by one and click "Keep timetable …" on the one you prefer.
 
 
 4. MANUAL CHANGES
@@ -110,7 +113,15 @@ comma = another day · B2B2 = double period · A1A1A1 = triple period.
 The classes must already exist (with the same name) on the "Classes" page.
 
 
-7. UPDATES
+7. DATA RECOVERY
+----------------
+The app automatically keeps the last two saves (at least 2 minutes apart) and a
+copy before every big change. If something goes wrong: Settings & file →
+"Recover earlier data…" → choose the last or previous save (or a copy) →
+"Recover". The current data is saved as a copy first.
+
+
+8. UPDATES
 ----------
 Replace only the application files. The data folder is not touched; the new
 version upgrades the data by itself. For extra safety:
