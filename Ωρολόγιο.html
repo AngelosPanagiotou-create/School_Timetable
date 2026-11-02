@@ -1268,6 +1268,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
 (function () {
   'use strict';
   var VERSION = '2.0';
+  var BROWSER_MODE = false;   // true = να δουλεύει και σκέτο σε browser (έκδοση που θα ολοκληρωθεί αργότερα)
   var DAYS = ['Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή'];
   var DB = null;
   var ui = { page: 'schedule', teacherId: null, classId: null, sel: null, drag: null, hlRow: null };
@@ -3280,6 +3281,17 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
           });
         });
       });
+      return;
+    }
+    // Η έκδοση που δουλεύει μόνη της σε browser θα έρθει αργότερα: προς το παρόν η εφαρμογή ανοίγει από το «Εκκίνηση.cmd».
+    if (!BROWSER_MODE) {
+      document.getElementById('app').innerHTML = '';
+      document.getElementById('app').appendChild(h('div', { style: 'margin:auto;max-width:560px;padding:40px 28px;display:flex;flex-direction:column;gap:14px;text-align:center' },
+        h('div', { style: 'font-family:var(--serif);font-size:40px' }, 'Ωρολόγιο'),
+        h('div', { style: 'line-height:1.6' }, 'Αυτό το αρχείο είναι μέρος της εφαρμογής και δεν ανοίγει μόνο του σε browser.'),
+        h('div', { class: 'card', style: 'text-align:left;line-height:1.6' }, h('b', null, 'Για να ανοίξεις την εφαρμογή:'),
+          h('div', null, '1. Κλείσε αυτή τη σελίδα.'), h('div', null, '2. Στον φάκελο της εφαρμογής κάνε διπλό κλικ στο «Εκκίνηση.cmd»'),
+          h('div', null, '   (ή στο εικονίδιο «Ωρολόγιο» της επιφάνειας εργασίας, αν υπάρχει).'))));
       return;
     }
     if (SCH.list.length) { if (!curSchool()) SCH.cur = SCH.list[0].id; DB = migrate(localData(SCH.cur) || emptyData()); }

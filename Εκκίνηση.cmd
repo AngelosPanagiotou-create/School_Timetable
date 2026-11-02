@@ -45,7 +45,6 @@ echo.
 echo  Δεν ολοκληρώθηκε η εγκατάσταση της Python.
 echo  Κατέβασέ τη από https://www.python.org/downloads/windows/
 echo  και τσέκαρε «Add python.exe to PATH». Μετά ξαναπάτα αυτό το αρχείο.
-echo  Μέχρι τότε μπορείς να ανοίξεις το «Ωρολόγιο.html» με διπλό κλικ.
 echo.
 pause
 exit /b 1
@@ -59,8 +58,6 @@ echo  Χωρίς Python η εφαρμογή δεν μπορεί να ανοίξ�
 echo  - Για να την εγκαταστήσεις αργότερα: ξαναπάτα αυτό το αρχείο,
 echo    ή κατέβασέ τη από https://www.python.org/downloads/windows/
 echo    (τσέκαρε «Add python.exe to PATH»).
-echo  - Μέχρι τότε μπορείς να ανοίξεις το «Ωρολόγιο.html» σε Edge ή Chrome
-echo    (χωρίς εγκατάσταση, με πιο απλή αυτόματη συμπλήρωση).
 echo.
 pause
 exit /b 1
