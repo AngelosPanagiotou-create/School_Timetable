@@ -111,6 +111,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
 .cell.pref::after{content:"";position:absolute;right:3px;top:3px;width:5px;height:5px;border-radius:5px;background:#D9A54A;opacity:.8}
 .tag:empty{background:var(--empty);box-shadow:inset 0 0 0 1px var(--emptyl)}
 /* κώλυμα: κουτάκι γεμάτο τελίτσες */
+.cell.closed{background:repeating-linear-gradient(45deg,#E6E1D5 0 2px,#F4F1EA 2px 9px)}
 .cell.no .tag:empty{background-color:var(--empty);background-image:radial-gradient(#8A8577 1.2px,transparent 1.4px);background-size:6px 6px}
 /* ώρα που λείπει από τμήμα: μεγάλο κόκκινο Χ */
 .cell.miss .tag{background:linear-gradient(to top right,transparent calc(50% - 1.5px),var(--miss) calc(50% - 1.5px),var(--miss) calc(50% + 1.5px),transparent calc(50% + 1.5px)),linear-gradient(to bottom right,transparent calc(50% - 1.5px),var(--miss) calc(50% - 1.5px),var(--miss) calc(50% + 1.5px),transparent calc(50% + 1.5px)),var(--empty)!important;box-shadow:inset 0 0 0 1px #E8B4B4!important}
@@ -395,7 +396,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
       var allowed = [], pref = [], must = [];
       for (var d = 0; d < D; d++) for (var h = 0; h < H; h++) {
         var k = key(d, h), av = (t.avail || {})[k], sl = (a.slots || {})[k];
-        allowed.push(av !== 'no' && sl !== 'never' && inRange(a, h) && inZone(data, cById[cls[0]], d, h));
+        allowed.push(av !== 'no' && sl !== 'never' && inRange(a, h) && slotAllowed(data, syncInfo, cById[cls[0]], d, h));
         pref.push(av === 'pref');
         if (sl === 'must') must.push(d * H + h);
       }
@@ -457,7 +458,10 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
       a.sp = Object.keys(set).map(Number);
       a.sp.forEach(function (pi) { sps[pi].N += a.hours; });
     });
-    sps.forEach(function (sp) { sp.lo = Math.floor(sp.N / D); sp.hi = Math.ceil(sp.N / D); });
+    // ώρες λειτουργίας: ανά ημέρα οι ανοιχτές ώρες (κλειστές = εκτός ωραρίου του σχολείου)
+    var openH = [], openDays = 0;
+    for (var od = 0; od < D; od++) { var L = []; for (var oh = 0; oh < H; oh++) if (!isClosed(data, od, oh)) L.push(oh); openH.push(L); if (L.length) openDays++; }
+    sps.forEach(function (sp) { sp.lo = Math.floor(sp.N / Math.max(1, openDays)); sp.hi = Math.ceil(sp.N / Math.max(1, openDays)); });
     var st = data.settings || {};
     // σετ ταυτόχρονων μικτών τμημάτων (μόνο όσα έχουν αναθέσεις)
     var syncs = syncInfo.sets.map(function (ids, si) {
@@ -472,102 +476,89 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
     var tLo = [], tWork = [];
     var tTarget = teachers.map(function (t, ti) {
       var need = 0; asg.forEach(function (a) { if (a.t === ti) need += a.hours; });
-      var days = 0, wd = []; for (var d = 0; d < D; d++) { var any = false; for (var h = 0; h < H; h++) if ((t.avail || {})[key(d, h)] !== 'no') any = true; wd.push(any); if (any) days++; }
+      var days = 0, wd = []; for (var d = 0; d < D; d++) { var any = false; for (var h = 0; h < H; h++) if ((t.avail || {})[key(d, h)] !== 'no' && !isClosed(data, d, h)) any = true; wd.push(any); if (any) days++; }
       tWork.push(wd); tLo.push(need ? Math.floor(need / Math.max(1, days)) : 0);
       return need ? Math.ceil(need / Math.max(1, days)) : 0;
     });
-    return { D: D, H: H, S: S, teachers: teachers, asg: asg, aById: aById, sps: sps, syncs: syncs, tTarget: tTarget, tLo: tLo, tWork: tWork, smooth: (data.settings || {}).smoothTeachers !== false, fairGaps: (data.settings || {}).fairGaps !== false,
+    return { D: D, H: H, S: S, openH: openH, closed: closedSet(data), teachers: teachers, asg: asg, aById: aById, sps: sps, syncs: syncs, tTarget: tTarget, tLo: tLo, tWork: tWork, smooth: (data.settings || {}).smoothTeachers !== false, fairGaps: (data.settings || {}).fairGaps !== false,
       studentRule: st.studentNoGaps !== false, balance: st.balanceDays !== false };
   }
 
   // «Από την … έως την … ώρα» (1-based, κενό = χωρίς όριο)
   function inRange(a, h) { return (!(a.fromHour > 0) || h + 1 >= a.fromHour) && (!(a.toHour > 0) || h + 1 <= a.toHour); }
-  // Ζώνες κατεύθυνσης Γ΄: τα μαθήματα κατεύθυνσης Γ΄ μπαίνουν μόνο μέσα στις ζώνες που δήλωσε ο χρήστης
-  function zonesG(data) {   // ζώνες κατεύθυνσης υπάρχουν μόνο στο Λύκειο
-    if (data.school && data.school.type && data.school.type !== 'lyceum') return [];
-    var z = (data.settings || {}).zonesG; return Array.isArray(z) ? z : []; }
-  // Τμήματα (Γ1, Γ2…) που έχουν κατεύθυνση Γ΄ — η γενική τους παιδεία και τα Κόντρα δεν μπαίνουν ποτέ στη ζώνη
-  var ZB_CACHE = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
-  function zoneBases(data) {
-    var hit = ZB_CACHE && ZB_CACHE.get(data); if (hit) return hit;
-    var out = {};
-    data.classes.forEach(function (c) { if (c.category === 'dirG' && isMixed(c)) baseClasses(data, c.id).forEach(function (b) { out[b] = 1; }); });
-    if (ZB_CACHE) ZB_CACHE.set(data, out);
-    return out;
-  }
-  function inZone(data, c, d, h) {
-    // Κατεύθυνση Β΄: ποτέ 6η και 7η ώρα (μόνο 1η–5η)
-    if (c && c.category === 'dirB' && isMixed(c)) return h < 5;
-    var z = zonesG(data); if (!z.length || !c) return true;
-    var inz = z.indexOf(d + '-' + h) >= 0;
-    if (c.category === 'dirG' && isMixed(c)) return inz;
-    if (!inz) return true;
-    var zb = zoneBases(data);
-    return !baseClasses(data, c.id).some(function (b) { return zb[b]; });   // γενική παιδεία / Κόντρα της Γ΄: έξω από τη ζώνη
-  }
-  // έλεγχος ζωνών: συνεχόμενες κάθε μέρα, έως 5η ώρα, σύνολο = ώρες κατεύθυνσης
-  function checkZones(data) {
-    var z = zonesG(data), D = data.settings.days, out = { total: z.length, perDay: [], errors: [] }, DN = ['Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο'];
-    for (var d = 0; d < D; d++) {
-      var hs = z.filter(function (k) { return +k.split('-')[0] === d; }).map(function (k) { return +k.split('-')[1]; }).sort(function (a, b) { return a - b; });
-      out.perDay.push(hs.length ? (hs[0] + 1) + 'η–' + (hs[hs.length - 1] + 1) + 'η' : '—');
-      if (hs.length && hs[hs.length - 1] - hs[0] + 1 !== hs.length) out.errors.push('Η ζώνη της ' + DN[d] + 'ς δεν είναι συνεχόμενη');
-      if (hs.some(function (h) { return h > 4; })) out.errors.push('Ζώνη μετά την 5η ώρα (' + DN[d] + ')');
+  /* ---------- Ώρες λειτουργίας, ζώνες μαθημάτων, ομάδες ταυτόχρονων ----------
+     settings.closed : ώρες ('d-h') μέσα στο πλέγμα ημερών×ωρών όπου το σχολείο δεν λειτουργεί
+     settings.zones  : [{ id, name, slots: ['d-h'…], classIds: […] }]   — μαθήματα που μπαίνουν ΜΟΝΟ μέσα στη ζώνη·
+                       μέσα στη ζώνη δεν μπαίνει κανένα άλλο μάθημα των ίδιων τμημάτων (της ίδιας τάξης)
+     syncGroups      : [{ id, name, classIds: […], maxHour }]       — μαθήματα που γίνονται την ίδια ώρα */
+  function closedSet(data) { var o = {}; ((data.settings || {}).closed || []).forEach(function (k) { o[k] = 1; }); return o; }
+  function isClosed(data, d, h) { var c = (data.settings || {}).closed; return !!c && c.indexOf(d + '-' + h) >= 0; }
+  function zoneList(data) { var z = (data.settings || {}).zones; return Array.isArray(z) ? z : []; }
+  function groupList(data) { return Array.isArray(data.syncGroups) ? data.syncGroups : []; }
+  // παλιό όνομα: όλες οι ώρες όλων των ζωνών (για χρωματισμό επικεφαλίδων)
+  function zonesG(data) { var out = []; zoneList(data).forEach(function (z) { (z.slots || []).forEach(function (k) { if (out.indexOf(k) < 0) out.push(k); }); }); return out; }
+  // Επιτρέπεται ένα τμήμα σε αυτή την ώρα; (κλειστή ώρα, ζώνη, «μόνο έως Νη ώρα», αποκλειστικότητα ζωνών)
+  function slotAllowed(data, info, c, d, h) {
+    var k = d + '-' + h;
+    if (isClosed(data, d, h)) return false;
+    if (!c) return true;
+    var mh = info.maxHourOf[c.id]; if (mh && h + 1 > mh) return false;
+    var z = info.zoneOf[c.id];
+    if (z) return !(z.slots || []).length || z.slots.indexOf(k) >= 0;
+    var bs = null;
+    for (var i = 0; i < info.zones.length; i++) {
+      var zz = info.zones[i]; if ((zz.slots || []).indexOf(k) < 0) continue;
+      bs = bs || baseClasses(data, c.id);
+      if (bs.some(function (b) { return info.zoneBases[zz.id][b]; })) return false;   // ίδια τάξη: έξω από τη ζώνη
     }
-    var need = {};
-    var cid = {}; data.classes.forEach(function (c) { cid[c.id] = c; });
+    return true;
+  }
+  function inZone(data, c, d, h) { return slotAllowed(data, syncSets(data), c, d, h); }
+  // Έλεγχος ζωνών: ώρες ορισμένες, συνεχόμενες κάθε μέρα, ώρες μαθημάτων ≤ ώρες ζώνης
+  function checkZones(data) {
+    var DN = ['Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο'], D = data.settings.days, info = syncSets(data), out = [];
     var hrsOf = function (id) { var n = 0; data.assignments.forEach(function (a) { if ((a.classIds || [])[0] === id) n += a.hours | 0; }); return n; };
-    var isDepC = function (c) { return (c.members || []).some(function (mb) { return isMixed(cid[mb]); }); };
-    // ώρες κάθε κατεύθυνσης = δικές της + όσες κάνει μαζί με άλλες (συγχωνευμένο τμήμα, π.χ. ΓΘετΥγ)
-    data.classes.forEach(function (c) {
-      if (c.category !== 'dirG' || !isMixed(c) || isDepC(c)) return;
-      var n = hrsOf(c.id);
-      data.classes.forEach(function (x) { if (x.category === 'dirG' && isMixed(x) && isDepC(x) && (x.members || []).indexOf(c.id) >= 0) n += hrsOf(x.id); });
-      need[c.name] = n;
+    var byId = {}; data.classes.forEach(function (c) { byId[c.id] = c; });
+    zoneList(data).forEach(function (z) {
+      var r = { id: z.id, name: z.name || 'Ζώνη', total: (z.slots || []).length, perDay: [], errors: [], warns: [], need: {}, hours: 0 };
+      for (var d = 0; d < D; d++) {
+        var hs = (z.slots || []).filter(function (k) { return +k.split('-')[0] === d; }).map(function (k) { return +k.split('-')[1]; }).sort(function (a, b) { return a - b; });
+        r.perDay.push(hs.length ? (hs[0] + 1) + 'η–' + (hs[hs.length - 1] + 1) + 'η' : '—');
+        if (hs.length && hs[hs.length - 1] - hs[0] + 1 !== hs.length) r.warns.push('Η ζώνη «' + r.name + '» δεν είναι συνεχόμενη ' + DN[d]);
+      }
+      // ώρες κάθε μαθήματος της ζώνης (+ όσες κάνει μαζί με άλλα, π.χ. κοινό τμήμα δύο κατευθύνσεων)
+      (z.classIds || []).forEach(function (id) {
+        var c = byId[id]; if (!c || info.mergeOf[id]) return;
+        var n = hrsOf(id); Object.keys(info.mergeOf).forEach(function (x) { if (info.mergeOf[x].indexOf(id) >= 0 && info.zoneOf[x] === z) n += hrsOf(x); });
+        if (n) r.need[c.name] = n;
+      });
+      var vals = Object.keys(r.need).map(function (k) { return r.need[k]; });
+      r.hours = vals.length ? Math.max.apply(null, vals) : 0;
+      var used = vals.length > 0;
+      if (used && !r.total) r.errors.push('Η ζώνη «' + r.name + '» δεν έχει ακόμα ώρες');
+      else if (used && r.hours > r.total) r.errors.push('Η ζώνη «' + r.name + '» έχει ' + r.total + ' ώρες, αλλά κάποιο μάθημά της έχει ' + r.hours);
+      out.push(r);
     });
-    out.need = need;
-    var vals = Object.keys(need).map(function (k) { return need[k]; }).filter(function (x) { return x > 0; });
-    out.hours = vals.length ? Math.max.apply(null, vals) : 0;
-    if (z.length && vals.length && vals.some(function (x) { return x !== z.length; })) out.errors.push('Οι ζώνες έχουν ' + z.length + ' ώρες, ενώ η κατεύθυνση Γ΄ έχει ' + vals.filter(function (x, i, a) { return a.indexOf(x) === i; }).join(' / ') + ' ώρες');
     return out;
   }
-  // Καθηγητές κατεύθυνσης Γ΄ με κώλυμα («δεν μπορεί») μέσα σε ζώνη
-  // Κωλύματα μέσα στη ζώνη: πρόβλημα ΜΟΝΟ όταν δεν βγαίνουν οι ώρες
-  //  (α) ο εκπαιδευτικός έχει λιγότερες ελεύθερες ώρες στη ζώνη από τις ώρες κατεύθυνσης Γ΄ που κάνει
-  //  (β) μια ώρα της ζώνης όπου δεν μπορεί κανένας εκπαιδευτικός μιας κατεύθυνσης (ενώ η κατεύθυνση γεμίζει όλη τη ζώνη)
+  // Κωλύματα μέσα σε ζώνη: πρόβλημα ΜΟΝΟ όταν δεν βγαίνουν οι ώρες
   function zoneConflicts(data) {
-    var z = zonesG(data), out = [], DN = ['Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο'], DS = ['Δευ', 'Τρί', 'Τετ', 'Πέμ', 'Παρ', 'Σάβ'];
-    if (!z.length) return out;
-    var cById = {}; data.classes.forEach(function (c) { cById[c.id] = c; });
-    var dirG = {}; data.classes.forEach(function (c) { if (c.category === 'dirG' && isMixed(c)) dirG[c.id] = c.name; });
+    var out = [], DS = ['Δευ', 'Τρί', 'Τετ', 'Πέμ', 'Παρ', 'Σάβ'];
     var tById = {}; data.teachers.forEach(function (t) { tById[t.id] = t; });
+    var byId = {}; data.classes.forEach(function (c) { byId[c.id] = c; });
     var tn = function (t) { return ((t.surname || '') + ' ' + (t.name || '')).trim() || 'Χωρίς όνομα'; };
     var when = function (k) { var d = +k.split('-')[0], h = +k.split('-')[1]; return DS[d] + ' ' + (h + 1) + 'η'; };
-    // (α)
-    data.teachers.forEach(function (t) {
-      var secs = [], hrs = 0;
-      data.assignments.forEach(function (a) { var c = (a.classIds || [])[0]; if (a.teacherId === t.id && dirG[c]) { hrs += a.hours | 0; if (secs.indexOf(dirG[c]) < 0) secs.push(dirG[c]); } });
-      if (!hrs) return;
-      var blocked = z.filter(function (k) { return (t.avail || {})[k] === 'no'; }), free = z.length - blocked.length;
-      if (free >= hrs) return;
-      out.push({ teacherId: t.id, teacher: tn(t), secs: secs, keys: blocked,
-        text: 'Ο/Η ' + tn(t) + ' (' + secs.join(', ') + ') κάνει ' + hrs + ' ώρες κατεύθυνσης Γ΄, αλλά μέσα στη ζώνη είναι ελεύθερος/η μόνο ' + free + ' ώρες (κώλυμα: ' + blocked.map(when).join(', ') + '). Άλλαξε τη ζώνη ή τα κωλύματα.' });
-    });
-    // (β) ομάδες μαθητών: κάθε κατεύθυνση (+ τα κοινά τμήματα που την περιλαμβάνουν)
-    var info = syncSets(data), mergeOf = info.mergeOf || {};
-    var hrsOf = function (id) { var n = 0; data.assignments.forEach(function (a) { if ((a.classIds || [])[0] === id && tById[a.teacherId]) n += a.hours | 0; }); return n; };
-    Object.keys(dirG).forEach(function (id) {
-      if (mergeOf[id] || (cById[id].members || []).some(function (mb) { return isMixed(cById[mb]); })) return;   // κοινά / εξαρτημένα: μετράνε μέσα στις ομάδες
-      var parts = [id]; Object.keys(mergeOf).forEach(function (x) { if (dirG[x] && mergeOf[x].indexOf(id) >= 0) parts.push(x); });
-      var total = parts.reduce(function (t, x) { return t + hrsOf(x); }, 0);
-      if (total !== z.length) return;   // δεν γεμίζει όλη τη ζώνη: το ελέγχει ο έλεγχος ζωνών
-      var tids = []; data.assignments.forEach(function (a) { if (parts.indexOf((a.classIds || [])[0]) >= 0 && tById[a.teacherId] && tids.indexOf(a.teacherId) < 0) tids.push(a.teacherId); });
-      if (!tids.length) return;
-      z.forEach(function (k) {
-        if (!tids.every(function (tid) { return (tById[tid].avail || {})[k] === 'no'; })) return;
-        var d = +k.split('-')[0], h = +k.split('-')[1];
-        out.push({ teacherId: null, teacher: tids.map(function (x) { return tn(tById[x]); }).join(', '), secs: [dirG[id]], keys: [k],
-          text: DN[d] + ' ' + (h + 1) + 'η ώρα: το ' + dirG[id] + ' πρέπει να έχει μάθημα σε κάθε ώρα της ζώνης, αλλά κανένας εκπαιδευτικός του (' + tids.map(function (x) { return tn(tById[x]); }).join(', ') + ') δεν μπορεί τότε. Άλλαξε τη ζώνη εκείνη την ημέρα.' });
+    zoneList(data).forEach(function (z) {
+      var zs = z.slots || []; if (!zs.length) return;
+      var inz = {}; (z.classIds || []).forEach(function (id) { inz[id] = 1; });
+      data.teachers.forEach(function (t) {
+        var secs = [], hrs = 0;
+        data.assignments.forEach(function (a) { var c = (a.classIds || [])[0]; if (a.teacherId === t.id && inz[c]) { hrs += a.hours | 0; if (byId[c] && secs.indexOf(byId[c].name) < 0) secs.push(byId[c].name); } });
+        if (!hrs) return;
+        var blocked = zs.filter(function (k) { return (t.avail || {})[k] === 'no'; }), free = zs.length - blocked.length;
+        if (free >= hrs) return;
+        out.push({ teacherId: t.id, zoneId: z.id, teacher: tn(t), secs: secs, keys: blocked,
+          text: 'Ο/Η ' + tn(t) + ' (' + secs.join(', ') + ') κάνει ' + hrs + ' ώρες στη ζώνη «' + (z.name || 'Ζώνη') + '», αλλά μέσα σε αυτήν είναι ελεύθερος/η μόνο ' + free + ' ώρες (κώλυμα: ' + blocked.map(when).join(', ') + ').' });
       });
     });
     return out;
@@ -583,47 +574,72 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
     return out;
   }
   function isMixed(c) { return !!c && (c.kind === 'mixed' || c.kind === 'group') && (c.members || []).length > 0; }
-  // Ομαδοποιεί τα μικτά τμήματα που «γίνονται ταυτόχρονα» (συμμετρικά/μεταβατικά).
+  // Ομάδες ταυτόχρονων (από τον χρήστη) και ζώνες → ετικέτες «παράλληλων» μικτών τμημάτων, σετ ταυτόχρονων, συγχωνευμένα.
+  //  · ίδια ομάδα ταυτόχρονων: γίνονται την ίδια ώρα (σετ) — π.χ. ΑΓαλ / ΑΓερμ
+  //  · ίδια ζώνη: διαφορετικοί μαθητές (εναλλακτικές), μπαίνουν μόνο μέσα στη ζώνη — π.χ. κατευθύνσεις
+  //  · μικτό που χρεώνεται σε ≥2 μικτά της ίδιας ομάδας/ζώνης = κοινό τμήμα τους (π.χ. ΓΘετΥγ)
+  var SS_CACHE = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
   function syncSets(data) {
+    var hit = SS_CACHE && SS_CACHE.get(data); if (hit && hit.sig === sigOf(data)) return hit.v;
+    var byId = {}; data.classes.forEach(function (c) { byId[c.id] = c; });
+    function isDep(c) { return (c.members || []).some(function (mb) { return isMixed(byId[mb]); }); }
+    var sets = [], tag = {}, setOf = {}, merges = [], mergeOf = {}, zoneOf = {}, maxHourOf = {}, groupOf = {};
+    groupList(data).forEach(function (g) {
+      var ids = (g.classIds || []).filter(function (id) { return byId[id]; });
+      ids.forEach(function (id) { groupOf[id] = g; if (+g.maxHour > 0) maxHourOf[id] = +g.maxHour; });
+      if (ids.length < 2) return;
+      ids.sort(function (x, y) { return (byId[x].name || '').localeCompare(byId[y].name || '', 'el', { numeric: true }); });
+      var si = sets.length; sets.push(ids); merges.push([]);
+      ids.forEach(function (id) { setOf[id] = si; if (isMixed(byId[id])) tag[id] = 'S:' + g.id; });
+    });
+    var zones = zoneList(data);
+    zones.forEach(function (z) {
+      var own = [];
+      (z.classIds || []).forEach(function (id) { if (!byId[id]) return; zoneOf[id] = z; if (isMixed(byId[id]) && !tag[id] && !isDep(byId[id])) { tag[id] = 'Z:' + z.id; own.push(id); } });
+      // τα μαθήματα της ζώνης γίνονται ταυτόχρονα (κάθε μαθητής σε ένα από αυτά)
+      if (own.length >= 2) {
+        own.sort(function (x, y) { return (byId[x].name || '').localeCompare(byId[y].name || '', 'el', { numeric: true }); });
+        var si = sets.length; sets.push(own); merges.push([]); own.forEach(function (id) { setOf[id] = si; });
+      }
+    });
+    // κοινά τμήματα (εξαρτημένα μικτά εκτός ομάδας ταυτόχρονων)
+    data.classes.forEach(function (c) {
+      if (!isMixed(c) || !isDep(c) || setOf[c.id] !== undefined) return;
+      var ms = (c.members || []).filter(function (mb) { return byId[mb]; }), t0 = tag[ms[0]];
+      if (ms.length >= 2 && t0 && ms.every(function (mb) { return tag[mb] === t0; })) {
+        tag[c.id] = t0; mergeOf[c.id] = ms.slice();
+        var si = setOf[ms[0]];
+        if (si !== undefined && ms.every(function (mb) { return setOf[mb] === si; })) { merges[si].push(c.id); setOf[c.id] = si; }
+        if (!zoneOf[c.id] && zoneOf[ms[0]]) zoneOf[c.id] = zoneOf[ms[0]];
+        return;
+      }
+      if (!tag[c.id]) tag[c.id] = 'D:' + c.id;   // μοναχικό εξαρτημένο (π.χ. ένα Κόντρα): δική του ετικέτα
+    });
+    var zoneBases = {};
+    zones.forEach(function (z) { var o = {}; (z.classIds || []).forEach(function (id) { if (byId[id]) baseClasses(data, id).forEach(function (b) { o[b] = 1; }); }); zoneBases[z.id] = o; });
+    var v = { sets: sets, tag: tag, setOf: setOf, merges: merges, mergeOf: mergeOf, zoneOf: zoneOf, maxHourOf: maxHourOf, groupOf: groupOf, zones: zones, zoneBases: zoneBases };
+    if (SS_CACHE) SS_CACHE.set(data, { sig: sigOf(data), v: v });
+    return v;
+  }
+  function sigOf(data) { return JSON.stringify([data.syncGroups || [], (data.settings || {}).zones || [], data.classes.map(function (c) { return [c.id, c.kind, c.members]; })]); }
+  // Παλιά λογική (έως 2.0): κατηγορία μικτού (lang/dirB/dirG/kontra) — μόνο για τη μετατροπή παλιών δεδομένων
+  function legacySyncSets(data) {
     var par = {}, byId = {};
     data.classes.forEach(function (c) { byId[c.id] = c; if (isMixed(c)) par[c.id] = c.id; });
     function find(x) { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; }
     function uni(a, b) { if (par[a] === undefined || par[b] === undefined) return; a = find(a); b = find(b); if (a !== b) par[b] = a; }
     function isDep(c) { return (c.members || []).some(function (mb) { return isMixed(byId[mb]); }); }
-    var byTag = {};
-    data.classes.forEach(function (c) {
-      if (!isMixed(c)) return;
-      (c.syncWith || []).forEach(function (o) { uni(c.id, o); });
-      if (c.parallel && c.parallel.trim()) { var k = c.parallel.trim(); if (byTag[k]) uni(byTag[k], c.id); else byTag[k] = c.id; }
-    });
-    // ίδια κατηγορία (ξένη γλώσσα / κατεύθυνση Β / κατεύθυνση Γ) + κοινό τμήμα χρέωσης → ταυτόχρονα
+    data.classes.forEach(function (c) { if (isMixed(c)) (c.syncWith || []).forEach(function (o) { uni(c.id, o); }); });
     var mixed = data.classes.filter(function (c) { return isMixed(c) && c.category; });
     for (var i = 0; i < mixed.length; i++) for (var j = i + 1; j < mixed.length; j++) {
-      var x = mixed[i], y = mixed[j];
-      var bx = baseClasses(data, x.id), by = baseClasses(data, y.id);
-      if (isDep(x) !== isDep(y)) continue;   // συγχωνευμένο (π.χ. ΓΘετ+ΓΥγ) ή Κόντρα: όχι μαζί με τα κανονικά
-      if (isDep(x) && isDep(y) && x.category !== 'kontra') continue;   // συγχωνευμένα: το καθένα μόνο του
+      var x = mixed[i], y = mixed[j], bx = baseClasses(data, x.id), by = baseClasses(data, y.id);
+      if (isDep(x) !== isDep(y)) continue;
+      if (isDep(x) && isDep(y) && x.category !== 'kontra') continue;
       if (x.category === y.category && bx.some(function (q) { return by.indexOf(q) >= 0; })) uni(x.id, y.id);
     }
     var groups = {};
     Object.keys(par).forEach(function (id) { var r = find(id); (groups[r] = groups[r] || []).push(id); });
-    var sets = [], tag = {}, setOf = {}, merges = [], mergeOf = {};
-    Object.keys(groups).forEach(function (r) {
-      var ids = groups[r];
-      if (ids.length < 2) { if (isDep(byId[ids[0]])) tag[ids[0]] = 'D:' + ids[0]; return; }   // μοναχικό εξαρτημένο: δική του ετικέτα
-      ids.sort(function (x, y) { return (byId[x].name || '').localeCompare(byId[y].name || '', 'el', { numeric: true }); });
-      ids.forEach(function (id) { tag[id] = 'S:' + r; setOf[id] = sets.length; });
-      sets.push(ids); merges.push([]);
-    });
-    // συγχωνευμένα: μικτό τμήμα ίδιας κατηγορίας που χρεώνεται σε ≥2 τμήματα του ίδιου σετ (π.χ. ΓΘετΥγ → Γθετ, Γυγ)
-    data.classes.forEach(function (c) {
-      if (!isMixed(c) || !isDep(c) || setOf[c.id] !== undefined) return;
-      var ms = c.members || [], si = setOf[ms[0]];
-      if (ms.length < 2 || si === undefined) return;
-      if (!ms.every(function (mb) { return setOf[mb] === si && byId[mb].category === c.category; })) return;
-      merges[si].push(c.id); setOf[c.id] = si; tag[c.id] = tag[ms[0]]; mergeOf[c.id] = ms.slice();
-    });
-    return { sets: sets, tag: tag, setOf: setOf, merges: merges, mergeOf: mergeOf };
+    return Object.keys(groups).map(function (r) { return groups[r]; }).filter(function (ids) { return ids.length > 1; });
   }
   // Κομμάτια μιας ανάθεσης: π.χ. [3,1] = ένα τρίωρο + ένα μονόωρο (το καθένα σε άλλη μέρα)
   function blocksOf(a) {
@@ -692,8 +708,8 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
     var m = this.m; if (!m.studentRule) return 0;
     var o = this.spOcc[pi], sp = m.sps[pi], H = m.H, cost = 0;
     for (var d = 0; d < m.D; d++) {
-      var n = 0, last = -1;
-      for (var h = 0; h < H; h++) if (o[d * H + h] > 0) { n++; last = h; }
+      var L = m.openH[d], n = 0, last = -1;   // συνεχόμενες ώρες μέσα στο ωράριο του σχολείου
+      for (var i = 0; i < L.length; i++) if (o[d * H + L[i]] > 0) { n++; last = i; }
       cost += (last + 1 - n) * W_HARD;
       if (m.balance) { if (n < sp.lo) cost += (sp.lo - n) * W_SBAL; else if (n > sp.hi) cost += (n - sp.hi) * W_SBAL; }   // προσπάθεια, όχι κανόνας
     }
@@ -756,7 +772,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
       if (m.smooth && hrs > m.tTarget[t]) cost += (hrs - m.tTarget[t]) * W_BAL + Math.max(0, hrs - m.tTarget[t] - 1) * W_BAL2;
       if (m.smooth && m.tWork[t][d] && hrs < m.tLo[t]) cost += (m.tLo[t] - hrs) * W_BAL + Math.max(0, m.tLo[t] - 1 - hrs) * W_BAL2;   // ισοκατανομή: ούτε πολύ λίγες
       var g = 0;
-      if (first >= 0) for (var h2 = first + 1; h2 < last; h2++) if (o[d * H + h2] === 0 && av[key(d, h2)] !== 'no') g++;   // ώρα με κώλυμα: όχι κενό
+      if (first >= 0) for (var h2 = first + 1; h2 < last; h2++) if (o[d * H + h2] === 0 && av[key(d, h2)] !== 'no' && !m.closed[key(d, h2)]) g++;   // ώρα με κώλυμα: όχι κενό
       gWeek += g;
       if (limW < 0) cost += g * W_GAP;   // χωρίς αριθμό την εβδομάδα: όσο λιγότερα κενά
       if (lim >= 0 && g > lim) cost += (g - lim) * (hard ? W_HARD : W_SOFT);   // «έως Ν κενά την ημέρα»
@@ -806,6 +822,18 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
     var dayN = ['Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο'];
     function when(s) { return dayN[Math.floor(s / H)] + ' ' + (s % H + 1) + 'η'; }
 
+    // ώρα που δεν επιτρέπεται: το σχολείο κλειστό, έξω από τη ζώνη του, μέσα σε ξένη ζώνη, μετά το «έως Νη ώρα»
+    (function () {
+      var info = syncSets(data), byC = {}; data.classes.forEach(function (c) { byC[c.id] = c; });
+      (data.schedule || []).forEach(function (e) {
+        var a = m.aById[e.aid]; if (!a) return;
+        var c = byC[(a.classIds || [])[0]], s = e.d * H + e.h;
+        if (!c || slotAllowed(data, info, c, e.d, e.h)) return;
+        var why = isClosed(data, e.d, e.h) ? 'το σχολείο δεν λειτουργεί αυτή την ώρα' : info.zoneOf[c.id] ? 'έξω από τη ζώνη «' + (info.zoneOf[c.id].name || '') + '»' : info.maxHourOf[c.id] && e.h + 1 > info.maxHourOf[c.id] ? 'μόνο έως την ' + info.maxHourOf[c.id] + 'η ώρα' : 'μέσα σε ζώνη της ίδιας τάξης';
+        flag(a.t, s, a.label + ': ' + why);
+        issues.push({ level: 'error', text: a.label + ' (' + tNames[a.t] + ', ' + when(s) + '): ' + why });
+      });
+    })();
     // σύγκρουση τμημάτων
     for (var s = 0; s < m.S; s++) {
       var list = cellsBySlot[s] || [];
@@ -831,7 +859,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
           if (v > 1) { flag(t, sl, 'Δύο μαθήματα την ίδια ώρα'); issues.push({ level: 'error', text: tNames[t] + ': δύο μαθήματα ' + when(sl) }); }
           if (v > 0 && av[key(d, h)] === 'no') { flag(t, sl, 'Ο καθηγητής δεν μπορεί αυτή την ώρα'); issues.push({ level: 'error', text: tNames[t] + ': μάθημα σε ώρα που δεν μπορεί (' + when(sl) + ')' }); }
         }
-        if (first >= 0) for (var h2 = first + 1; h2 < last; h2++) if (o[d * H + h2] === 0 && av[key(d, h2)] !== 'no') { g++; gapCells[t + ':' + (d * H + h2)] = 1; }
+        if (first >= 0) for (var h2 = first + 1; h2 < last; h2++) if (o[d * H + h2] === 0 && av[key(d, h2)] !== 'no' && !m.closed[key(d, h2)]) { g++; gapCells[t + ':' + (d * H + h2)] = 1; }
         gw += g; hrs += n;
         if (tt.maxHoursDay > 0 && n > tt.maxHoursDay) issues.push({ level: 'error', text: tNames[t] + ': ' + n + ' ώρες ' + dayN[d] + ' (όριο ' + tt.maxHoursDay + ')' });
         var lim = tt.maxGapsDay == null || tt.maxGapsDay === '' ? -1 : +tt.maxGapsDay;
@@ -878,12 +906,13 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
     if (m.studentRule) m.sps.forEach(function (sp, pi) {
       var o = st.spOcc[pi], days = [];
       for (var d = 0; d < D; d++) {
-        var n = 0, last = -1;
-        for (var h = 0; h < H; h++) if (o[d * H + h] > 0) { n++; last = h; }
+        var L = m.openH[d], n = 0, last = -1;
+        for (var i = 0; i < L.length; i++) if (o[d * H + L[i]] > 0) { n++; last = i; }
         days.push(n);
-        for (var h2 = 0; h2 < last; h2++) if (o[d * H + h2] === 0) {
+        for (var i2 = 0; i2 < last; i2++) if (o[d * H + L[i2]] === 0) {
+          var h2 = L[i2];
           classHoles[sp.base + ':' + (d * H + h2)] = 1;
-          issues.push({ level: 'error', text: 'Μαθητές ' + sp.name + ': κενό ' + when(d * H + h2) + ' ώρα' + (h2 === 0 ? ' (η ημέρα πρέπει να ξεκινά 1η ώρα)' : '') });
+          issues.push({ level: 'error', text: 'Μαθητές ' + sp.name + ': κενό ' + when(d * H + h2) + ' ώρα' + (i2 === 0 ? ' (η ημέρα πρέπει να ξεκινά με την πρώτη ώρα του σχολείου)' : '') });
         }
       }
       spDays[pi] = days;
@@ -924,8 +953,8 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
       var free = a.allowed.filter(Boolean).length;
       if (free < a.hours) msgs.push({ level: 'error', text: name(t) + ' · ' + a.label + ': μόνο ' + free + ' επιτρεπτές ώρες για ' + a.hours + ' ώρες μαθήματος' });
     });
-    if (zonesG(data).length) checkZones(data).errors.forEach(function (e) { msgs.push({ level: 'error', text: 'Ζώνες κατεύθυνσης Γ΄: ' + e }); });
-    zoneConflicts(data).forEach(function (x) { msgs.push({ level: 'error', text: 'Ζώνες κατεύθυνσης Γ΄: ' + x.text }); });
+    checkZones(data).forEach(function (z) { z.errors.forEach(function (e) { msgs.push({ level: 'error', text: e }); }); z.warns.forEach(function (e) { msgs.push({ level: 'warn', text: e }); }); });
+    zoneConflicts(data).forEach(function (x) { msgs.push({ level: 'error', text: x.text }); });
     m.syncs.forEach(function (sy) {
       var first = sy.hours[0];
       if (sy.hours.some(function (x) { return x !== first; }))
@@ -936,11 +965,11 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
     });
     m.teachers.forEach(function (t, ti) {
       var need = 0; m.asg.forEach(function (a) { if (a.t === ti) need += a.hours; });
-      var free = 0; for (var k = 0; k < m.S; k++) { var d = Math.floor(k / m.H), h = k % m.H; if ((t.avail || {})[key(d, h)] !== 'no') free++; }
+      var free = 0; for (var k = 0; k < m.S; k++) { var d = Math.floor(k / m.H), h = k % m.H; if ((t.avail || {})[key(d, h)] !== 'no' && !m.closed[key(d, h)]) free++; }
       if (need > free) msgs.push({ level: 'error', text: name(t) + ': ' + need + ' ώρες αναθέσεων αλλά μόνο ' + free + ' διαθέσιμες ώρες' });
       // δεσμευτικά κενά: να ταιριάζουν «την ημέρα» και «την εβδομάδα»
       var gd = t.maxGapsDay == null || t.maxGapsDay === '' ? -1 : +t.maxGapsDay, gw = t.maxGapsWeek == null || t.maxGapsWeek === '' ? -1 : +t.maxGapsWeek;
-      var wdays = 0; for (var dd = 0; dd < m.D; dd++) { var any2 = false; for (var hh2 = 0; hh2 < m.H; hh2++) if ((t.avail || {})[key(dd, hh2)] !== 'no') any2 = true; if (any2) wdays++; }
+      var wdays = 0; for (var dd = 0; dd < m.D; dd++) { var any2 = false; for (var hh2 = 0; hh2 < m.H; hh2++) if ((t.avail || {})[key(dd, hh2)] !== 'no' && !m.closed[key(dd, hh2)]) any2 = true; if (any2) wdays++; }
       var mh = +t.maxHoursDay > 0 ? +t.maxHoursDay : 0;
       if (mh && need > mh * wdays) msgs.push({ level: 'error', text: name(t) + ': ' + need + ' ώρες με το πολύ ' + mh + ' την ημέρα δεν χωρούν σε ' + wdays + ' μέρες' });
       if (t.gapsMode !== 'soft' && gd >= 0 && gw > gd * wdays) msgs.push({ level: 'error', text: name(t) + ': ' + gw + ' κενά την εβδομάδα δεν χωρούν με έως ' + gd + ' την ημέρα σε ' + wdays + ' μέρες' });
@@ -1244,7 +1273,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
 
   function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
-  var api = { baseClasses: baseClasses, zoneConflicts: zoneConflicts, checkZones: checkZones, zonesG: zonesG, blocksOf: blocksOf, syncSets: syncSets, isMixed: isMixed, inRange: inRange, buildModel: buildModel, analyze: analyze, solve: solve, precheck: precheck, splitUnits: splitUnits, labelOf: labelOf, clashes: clashes };
+  var api = { slotAllowed: slotAllowed, legacySyncSets: legacySyncSets, zoneList: zoneList, groupList: groupList, isClosed: isClosed, baseClasses: baseClasses, zoneConflicts: zoneConflicts, checkZones: checkZones, zonesG: zonesG, blocksOf: blocksOf, syncSets: syncSets, isMixed: isMixed, inRange: inRange, buildModel: buildModel, analyze: analyze, solve: solve, precheck: precheck, splitUnits: splitUnits, labelOf: labelOf, clashes: clashes };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.Engine = api;
 
@@ -1269,9 +1298,9 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
 <script>/* Ωρολόγιο — διεπαφή. Ίδιο αρχείο για την έκδοση HTML και την έκδοση .pyw. */
 (function () {
   'use strict';
-  var VERSION = '2.0';
+  var VERSION = '2.1';
   var BROWSER_MODE = false;   // true = να δουλεύει και σκέτο σε browser (έκδοση που θα ολοκληρωθεί αργότερα)
-  var DAYS = ['Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή'];
+  var DAYS = ['Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο'];
   var DB = null;
   var ui = { page: 'schedule', teacherId: null, classId: null, sel: null, drag: null, hlRow: null };
   var store = { mode: 'local', label: '', saved: null, needsReconnect: false, unsupported: false, dir: null, native: null, nativeInfo: null };
@@ -1333,15 +1362,23 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
   function asgIsGroup(a) { return (a.classIds || []).some(function (id) { var c = cls(id); return c && c.kind === 'mixed'; }); }
 
   /* ---- Χρωματική παλέτα (ρυθμίσεις χρήστη, μένουν στο data.json) ---- */
-  var PAL_KEYS = [['A', 'Α΄ τάξη'], ['B', 'Β΄ τάξη'], ['G', 'Γ΄ τάξη'], ['langA', 'Ξένες γλώσσες Α΄'], ['langB', 'Ξένες γλώσσες Β΄'],
-    ['dirB', 'Κατεύθυνση Β΄'], ['dirG', 'Κατεύθυνση Γ΄'], ['zone', 'Ζώνη κατεύθυνσης Γ΄'], ['kontra', 'Κόντρα']];
+  // Χρώματα: τάξεις Α΄/Β΄/Γ΄, κάθε ομάδα «ταυτόχρονα» (g:id), κάθε ζώνη (z:id) και το φόντο των ωρών ζώνης
+  function palKeys() {
+    var out = [['A', 'Α΄ τάξη'], ['B', 'Β΄ τάξη'], ['G', 'Γ΄ τάξη']];
+    Engine.groupList(DB).forEach(function (g) { out.push(['g:' + g.id, g.name || 'Ταυτόχρονα']); });
+    Engine.zoneList(DB).forEach(function (z) { out.push(['z:' + z.id, 'Μαθήματα ζώνης «' + (z.name || 'Ζώνη') + '»']); });
+    if (Engine.zoneList(DB).length) out.push(['zone', 'Φόντο ωρών ζώνης']);
+    return out;
+  }
   function pal() { var p = DB.settings.palette; return p && typeof p === 'object' ? p : {}; }
   function palKeyOf(a) {
     var c = cls((a.classIds || [])[0]); if (!c) return '';
     var f = family(c), yr = f === 'fA' ? 'A' : f === 'fB' ? 'B' : f === 'fG' ? 'G' : '';
     if (c.kind === 'mixed') {
-      if (c.category === 'lang') return yr === 'A' ? 'langA' : yr === 'B' ? 'langB' : yr;
-      if (c.category === 'dirB' || c.category === 'dirG' || c.category === 'kontra') return c.category;
+      var info = Engine.syncSets(DB), g = info.groupOf[c.id], z = info.zoneOf[c.id];
+      if (!g && info.mergeOf[c.id]) g = info.groupOf[info.mergeOf[c.id][0]];
+      if (g) return 'g:' + g.id;
+      if (z) return 'z:' + z.id;
     }
     return yr;
   }
@@ -1409,7 +1446,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
   /* ================= δεδομένα ================= */
   function emptyData() {
     return { schema: 1, app: 'orologio', school: { name: '', year: '', validFrom: '', title: 'Συνολικό ωρολόγιο Εκπαιδευτικών' },
-      settings: { days: 5, hours: 7, solverSeconds: 30, studentNoGaps: true, balanceDays: true, smoothTeachers: true, fairGaps: true, zonesG: [] }, teachers: [], classes: [], assignments: [], schedule: [] };
+      settings: { days: 5, hours: 7, solverSeconds: 30, studentNoGaps: true, balanceDays: true, smoothTeachers: true, fairGaps: true, closed: [] }, teachers: [], classes: [], assignments: [], schedule: [] };
   }
   // Αναβαθμίζει δεδομένα παλιότερων εκδόσεων χωρίς να χάνεται τίποτα.
   function migrate(d) {
@@ -1423,21 +1460,23 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
       // v1.26: καταργείται η «διάθεση σε άλλο σχολείο» — μένουν μόνο οι ώρες διδασκαλίας σε αυτό το σχολείο
       if (+t.lendHours > 0 && +t.mandatory > 0) t.mandatory = Math.max(0, +t.mandatory - +t.lendHours);
       t.lendHours = null; t.lendSchool = ''; });
-    // v1.7: «ομάδες» → μικτά τμήματα· ετικέτες παράλληλων → «ταυτόχρονα με»
-    var legacy = Engine.syncSets(d);
     d.classes.forEach(function (c) {
       c.members = c.members || [];
       if (c.kind === 'group') c.kind = c.members.length ? 'mixed' : 'class';
       c.kind = c.kind === 'mixed' ? 'mixed' : 'class';
       c.syncWith = c.syncWith || []; if (c.category == null) c.category = '';
-      var si = legacy.setOf[c.id];
-      if (si !== undefined && !(legacy.mergeOf || {})[c.id]) legacy.sets[si].forEach(function (o) { if (o !== c.id && c.syncWith.indexOf(o) < 0) c.syncWith.push(o); });
       delete c.parallel;
     });
     // μικτά που χρεώνονται σε μικτά (Κόντρα, κοινά τμήματα όπως ΓΘετΥγ) με κατηγορία: χωρίς παλιές συνδέσεις «ταυτόχρονα»
     var cIdx = {}; d.classes.forEach(function (c) { cIdx[c.id] = c; });
     var depIds = d.classes.filter(function (c) { return c.kind === 'mixed' && c.category && c.members.some(function (mb) { return cIdx[mb] && cIdx[mb].kind === 'mixed'; }); }).map(function (c) { return c.id; });
     d.classes.forEach(function (c) { if (depIds.indexOf(c.id) >= 0) c.syncWith = []; else c.syncWith = c.syncWith.filter(function (o) { return depIds.indexOf(o) < 0; }); });
+    // v2.1: κατηγορίες (γλώσσα / κατεύθυνση Β΄ / Γ΄ / Κόντρα) → ομάδες «ταυτόχρονα» και ζώνες με όνομα
+    if (!Array.isArray(d.settings.zones)) migrateGroups(d);
+    if (!Array.isArray(d.syncGroups)) d.syncGroups = [];
+    if (!Array.isArray(d.settings.closed)) d.settings.closed = [];
+    delete d.settings.zonesG;
+    d.classes.forEach(function (c) { delete c.syncWith; delete c.category; });
     // v1.7: ένα τμήμα ανά ανάθεση · κομμάτια (μονόωρα/δίωρα/τρίωρα)
     d.assignments.forEach(function (a) {
       a.classIds = (a.classIds || []).slice(0, 1); a.slots = {}; a.fromHour = 0; a.toHour = 0; // v1.27: καταργήθηκε το «Πότε γίνεται το μάθημα»
@@ -1446,6 +1485,48 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
     });
     d.schema = 1; d.app = 'orologio';
     return d;
+  }
+
+  function migrateGroups(d) {
+    var byId0 = {}; d.classes.forEach(function (c) { byId0[c.id] = c; });
+    var cat = function (id) { return (byId0[id] || {}).category || ''; };
+    var mixed = function (c) { return c && c.kind === 'mixed' && (c.members || []).length; };
+    var P = d.settings.palette && typeof d.settings.palette === 'object' ? d.settings.palette : null;
+    var yearOf = function (ids) {
+      var y = ''; ids.forEach(function (id) { Engine.baseClasses(d, id).forEach(function (b) { var n = ((byId0[b] || {}).name || '').trim().charAt(0).toUpperCase(); if (!y && /[ΑΒΓABG]/.test(n)) y = { A: 'Α', B: 'Β', G: 'Γ' }[n] || n; }); }); return y;
+    };
+    var zones = [], groups = [], names = {};
+    var uniq = function (n) { var x = n, i = 2; while (names[x]) x = n + ' ' + (i++); names[x] = 1; return x; };
+    var gIds = d.classes.filter(function (c) { return mixed(c) && c.category === 'dirG'; }).map(function (c) { return c.id; });
+    var oldZ = Array.isArray(d.settings.zonesG) ? d.settings.zonesG.slice() : [];
+    if (gIds.length || oldZ.length) {
+      var z = { id: uid('z'), name: uniq('Κατεύθυνση Γ΄'), slots: oldZ, classIds: gIds };
+      zones.push(z); if (P && P.dirG) P['z:' + z.id] = P.dirG;
+    }
+    Engine.legacySyncSets(d).forEach(function (ids) {
+      ids = ids.filter(function (id) { return cat(id) !== 'dirG'; });
+      if (ids.length < 2) return;
+      var c0 = cat(ids[0]), y = yearOf(ids), name, key = c0, mh = 0;
+      if (c0 === 'lang') { name = 'Ξένες γλώσσες' + (y ? ' ' + y + '΄' : ''); key = y === 'Α' ? 'langA' : y === 'Β' ? 'langB' : 'lang'; }
+      else if (c0 === 'dirB') { name = 'Κατεύθυνση' + (y ? ' ' + y + '΄' : ''); mh = 5; }
+      else if (c0 === 'kontra') name = 'Κόντρα' + (y && y !== 'Γ' ? ' ' + y + '΄' : '');
+      else name = 'Ταυτόχρονα' + (y ? ' ' + y + '΄' : '');
+      var g = { id: uid('g'), name: uniq(name), classIds: ids.slice(), maxHour: mh, printRows: c0 === 'dirB' };
+      groups.push(g); if (P && P[key]) P['g:' + g.id] = P[key];
+    });
+    // μονά μικτά «Κατεύθυνση Β΄» (χωρίς ζευγάρι): κρατούν το «μόνο έως 5η ώρα»
+    var inG = {}; groups.forEach(function (g) { g.classIds.forEach(function (id) { inG[id] = 1; }); });
+    var lone = d.classes.filter(function (c) { return mixed(c) && c.category === 'dirB' && !inG[c.id]; });
+    lone.forEach(function (c) { groups.push({ id: uid('g'), name: uniq('Έως 5η ώρα: ' + c.name), classIds: [c.id], maxHour: 5 }); });
+    // μονή ξένη γλώσσα (π.χ. μόνο ΒΓαλ ακόμα): ομάδα με ένα τμήμα, για να μπει εύκολα και η δεύτερη γλώσσα
+    var byYear = {};
+    d.classes.filter(function (c) { return mixed(c) && c.category === 'lang' && !inG[c.id]; }).forEach(function (c) { var y = yearOf([c.id]); (byYear[y] = byYear[y] || []).push(c.id); });
+    Object.keys(byYear).forEach(function (y) {
+      var g = { id: uid('g'), name: uniq('Ξένες γλώσσες' + (y ? ' ' + y + '΄' : '')), classIds: byYear[y], maxHour: 0 };
+      groups.push(g); var key = y === 'Α' ? 'langA' : y === 'Β' ? 'langB' : ''; if (P && P[key]) P['g:' + g.id] = P[key];
+    });
+    if (P) ['langA', 'langB', 'dirB', 'dirG', 'kontra'].forEach(function (k) { delete P[k]; });
+    d.settings.zones = zones; d.syncGroups = groups;
   }
 
   /* ================= αποθήκευση ================= */
@@ -1472,9 +1553,10 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
     return Promise.resolve(localData(id));
   }
   function switchSchool(id, fresh) {
-    if (SCH.cur && DB) { clearTimeout(saveTimer); saveNow(); }   // πρώτα σώζεται το σχολείο που κλείνει
+    if (SCH.cur && DB && schoolLoaded) { clearTimeout(saveTimer); saveNow(); }   // πρώτα σώζεται το σχολείο που κλείνει
+    schoolLoaded = false; clearTimeout(saveTimer);
     var go = function (d) {
-      SCH.cur = id; regSave();
+      SCH.cur = id; regSave(); schoolLoaded = true;
       DB = migrate(d || emptyData()); sessionBackup = false;
       ui.page = 'schedule'; ui.teacherId = ui.classId = null; ui.tDraft = ui.classDraft = ui.asgEdit = null; ui.sel = null; ui.hlRow = null;
       render(); saveNow();
@@ -1483,17 +1565,70 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
     loadSchool(id).then(go);
   }
   function schoolNameOf(d) { return ((d && d.school && d.school.name) || '').trim(); }
+  /* ---- Ώρες λειτουργίας σχολείου: πλέγμα Δευτέρα–Σάββατο × 1η–10η ---- */
+  var OP_D = 6, OP_H = 10;
+  function openSetOf(st) {   // από days/hours/closed → σύνολο ανοιχτών ωρών
+    var o = {}; for (var d = 0; d < st.days; d++) for (var hh = 0; hh < st.hours; hh++) if ((st.closed || []).indexOf(d + '-' + hh) < 0) o[d + '-' + hh] = 1; return o;
+  }
+  function opFromOpen(open) {   // → { days, hours, closed }
+    var D = 0, H = 0; Object.keys(open).forEach(function (k) { var d = +k.split('-')[0], hh = +k.split('-')[1]; D = Math.max(D, d + 1); H = Math.max(H, hh + 1); });
+    var closed = []; for (var d = 0; d < D; d++) for (var hh = 0; hh < H; hh++) if (!open[d + '-' + hh]) closed.push(d + '-' + hh);
+    return { days: D, hours: H, closed: closed };
+  }
+  function opSummary(st) {
+    var open = openSetOf(st), per = [];
+    for (var d = 0; d < st.days; d++) { var n = 0; for (var hh = 0; hh < st.hours; hh++) if (open[d + '-' + hh]) n++; per.push(n); }
+    var same = per.every(function (x) { return x === per[0]; });
+    return DAYS[0].slice(0, 3) + '–' + DAYS[st.days - 1].slice(0, 3) + ' · ' + (same ? per[0] + ' ώρες την ημέρα' : per.join('·') + ' ώρες') + ' · ' + per.reduce(function (a, b) { return a + b; }, 0) + ' ώρες την εβδομάδα';
+  }
+  function opGrid(open, onChange) {
+    var box = h('div');
+    function draw() {
+      box.innerHTML = '';
+      box.appendChild(hoursGrid({ days: OP_D, hours: OP_H, onText: 'λειτουργεί', offText: 'κλειστό',
+        isOn: function (d, hh) { return !!open[d + '-' + hh]; },
+        toggle: function (d, hh) { var k = d + '-' + hh; if (open[k]) delete open[k]; else open[k] = 1; draw(); if (onChange) onChange(); } }));
+      var st = opFromOpen(open);
+      box.appendChild(h('div', { class: 'sub', style: 'margin-top:6px' }, st.days ? opSummary(st) : 'Κλικ στις ώρες που λειτουργεί το σχολείο.'));
+    }
+    var quick = function (D, H) { Object.keys(open).forEach(function (k) { delete open[k]; }); for (var d = 0; d < D; d++) for (var hh = 0; hh < H; hh++) open[d + '-' + hh] = 1; draw(); if (onChange) onChange(); };
+    draw();
+    return h('div', { class: 'f' },
+      h('div', { class: 'row', style: 'gap:6px;flex-wrap:wrap' }, h('span', { class: 'sub' }, 'Γρήγορα:'),
+        [[5, 6], [5, 7], [5, 8], [6, 7]].map(function (x) { return h('button', { class: 'qk', onclick: function () { quick(x[0], x[1]); } }, (x[0] === 5 ? 'Δευ–Παρ' : 'Δευ–Σάβ') + ' · ' + x[1] + ' ώρες'); })),
+      box);
+  }
+  function opHoursDialog() {
+    var open = openSetOf(DB.settings), m;
+    function save() {
+      var st = opFromOpen(open);
+      if (!st.days) { toast('Διάλεξε τις ώρες που λειτουργεί το σχολείο.', true); return; }
+      var lost = DB.schedule.filter(function (e) { return !open[e.d + '-' + e.h]; });
+      var go = function () {
+        if (lost.length) backup('πριν-την-αλλαγή-ωρών');
+        DB.schedule = DB.schedule.filter(function (e) { return open[e.d + '-' + e.h]; });
+        DB.settings.days = st.days; DB.settings.hours = st.hours; DB.settings.closed = st.closed;
+        Engine.zoneList(DB).forEach(function (z) { z.slots = (z.slots || []).filter(function (k) { return open[k]; }); });
+        m.close(); commit(); toast('Οι ώρες λειτουργίας αποθηκεύτηκαν.' + (lost.length ? ' ' + lost.length + ' ώρες πήγαν στο «Χωρίς θέση».' : ''));
+      };
+      if (lost.length) ask('Ώρες λειτουργίας', lost.length + ' ώρες του προγράμματος είναι σε ώρες που κλείνουν και θα πάνε στο «Χωρίς θέση».', [{ t: 'Συνέχεια', v: 'y', pri: true }]).then(function (v) { if (v === 'y') go(); });
+      else go();
+    }
+    m = modal([h('header', null, h('h2', null, 'Ώρες λειτουργίας')),
+      h('div', { class: 'body' }, h('div', { class: 'sub' }, 'Κλικ στις ώρες που λειτουργεί το σχολείο (● = λειτουργεί).'), opGrid(open)),
+      h('footer', null, h('span'), h('div', { class: 'row' }, h('button', { class: 'btn', onclick: function () { m.close(); } }, 'Ακύρωση'), h('button', { class: 'btn pri', onclick: save }, 'Αποθήκευση')))], true);
+    m.el.querySelector('.dlg').classList.add('wide');
+  }
   // «Εισαγωγή σχολείου»: νέο κενό σχολείο ή από αρχείο αντιγράφου (.json)
   function newSchoolDialog(first) {
     var m, nm = h('input', { class: 'inp', placeholder: 'π.χ. 2ο Γενικό Λύκειο …' }), yr = h('input', { class: 'inp', placeholder: 'π.χ. 2026–27' });
-    var days = 5, hours = 7, stype = 'lyceum';
-    var sel = function (vals, cur, fn) { var x = h('select', { class: 'inp' }, vals.map(function (v) { var o = h('option', { value: v }, String(v)); if (v === cur) o.selected = true; return o; })); x.onchange = function () { fn(+x.value); }; return x; };
+    var open = openSetOf({ days: 5, hours: 7, closed: [] });
     function create(data) {
       var name = (nm.value || '').trim() || schoolNameOf(data);
       if (!name) { toast('Γράψε το όνομα του σχολείου.', true); nm.focus(); return; }
       var d = data ? migrate(data) : emptyData();
       d.school.name = name; if (yr.value.trim()) d.school.year = yr.value.trim();
-      if (!data) { d.settings.days = days; d.settings.hours = hours; d.school.type = stype; }
+      if (!data) { var st = opFromOpen(open); if (!st.days) { toast('Διάλεξε τις ώρες που λειτουργεί το σχολείο.', true); return; } d.settings.days = st.days; d.settings.hours = st.hours; d.settings.closed = st.closed; }
       var id = 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
       SCH.list.push({ id: id, name: name }); m.close();
       switchSchool(id, d);
@@ -1516,17 +1651,14 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
       h('div', { class: 'body' },
         first ? h('div', { style: 'line-height:1.55' }, 'Για να ξεκινήσεις, γράψε το σχολείο σου. Μπορείς να προσθέσεις κι άλλα σχολεία όποτε θέλεις — το καθένα έχει τους δικούς του εκπαιδευτικούς, τμήματα και πρόγραμμα.') : null,
         h('label', { class: 'f' }, h('span', null, 'Όνομα σχολείου (όπως θα τυπώνεται)'), nm),
-        (function () { var seg = h('div', { class: 'seg', role: 'radiogroup', 'aria-label': 'Είδος σχολείου' });
-          var draw = function () { seg.innerHTML = ''; [['lyceum', 'Λύκειο'], ['gym', 'Γυμνάσιο'], ['other', 'Άλλο']].forEach(function (x) { seg.appendChild(h('button', { class: stype === x[0] ? 'on' : '', role: 'radio', 'aria-checked': stype === x[0] ? 'true' : 'false', onclick: function () { stype = x[0]; draw(); } }, x[1])); }); };
-          draw(); return h('div', { class: 'f' }, h('span', null, 'Είδος σχολείου (στο Λύκειο υπάρχουν κατευθύνσεις, ζώνες κατεύθυνσης Γ΄ και Κόντρα)'), seg); })(),
-        h('div', { class: 'g3' }, h('label', { class: 'f' }, h('span', null, 'Σχολικό έτος'), yr),
-          h('label', { class: 'f' }, h('span', null, 'Ημέρες την εβδομάδα'), sel([5, 6], 5, function (v) { days = v; })),
-          h('label', { class: 'f' }, h('span', null, 'Ώρες την ημέρα'), sel([5, 6, 7, 8], 7, function (v) { hours = v; }))),
+        h('label', { class: 'f' }, h('span', null, 'Σχολικό έτος'), yr),
+        h('div', { class: 'f' }, h('span', null, 'Ώρες λειτουργίας — κλικ στις ώρες που λειτουργεί το σχολείο'), opGrid(open)),
         h('div', { class: 'sub' }, 'Ή φέρε ένα σχολείο από αρχείο αντιγράφου (.json) — π.χ. από «Ρυθμίσεις & αρχείο → Εξαγωγή αντιγράφου» άλλου υπολογιστή.')),
       h('footer', null, h('button', { class: 'btn', onclick: fromFile }, icon('folder', 16), 'Από αρχείο αντιγράφου…'),
         h('div', { class: 'row' }, first ? null : h('button', { class: 'btn', onclick: function () { m.close(); } }, 'Ακύρωση'),
           h('button', { class: 'btn pri', onclick: function () { create(null); } }, icon('plus', 16), 'Δημιουργία σχολείου')))
     ], true);
+    m.el.querySelector('.dlg').classList.add('wide');
     if (first) m.el.addEventListener('mousedown', function (e) { e.stopPropagation(); }, true);
     setTimeout(function () { nm.focus(); }, 30);
   }
@@ -1564,8 +1696,9 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
     document.body.appendChild(mm);
   }
 
+  var schoolLoaded = false;   // ποτέ αποθήκευση πριν φορτωθούν τα δεδομένα του σχολείου
   function saveNow() {
-    if (!SCH.cur) return;
+    if (!SCH.cur || !schoolLoaded) return;
     var json = JSON.stringify(DB, null, 1);
     try { localStorage.setItem('orologio-cache-' + SCH.cur, json); } catch (e) { }
     var cs = curSchool(), nm = schoolNameOf(DB);
@@ -1781,7 +1914,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
         st0.addEventListener('click', function () { var p0 = document.querySelector('.issuesbox'); if (p0) { p0.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); p0.classList.add('flash'); setTimeout(function () { p0.classList.remove('flash'); }, 900); } }); return st0; })()));
     var P = pal();
     main.appendChild(h('div', { class: 'legend' },
-      PAL_KEYS.filter(function (k) { return P[k[0]] && (isLyceum() || ['dirB', 'dirG', 'zone', 'kontra'].indexOf(k[0]) < 0); }).map(function (k) { return h('span', null, h('i', { class: 'sw', style: 'background:' + P[k[0]] + ';box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)' }), k[1]); }),
+      palKeys().filter(function (k) { return P[k[0]]; }).map(function (k) { return h('span', null, h('i', { class: 'sw', style: 'background:' + P[k[0]] + ';box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)' }), k[1]); }),
       h('span', null, h('i', { class: 'sw', style: 'background:#fff;box-shadow:inset 0 0 0 2px #3A4057' }), 'Μικτό τμήμα'),
       h('span', null, h('i', { class: 'sw', style: 'background-color:var(--empty);background-image:radial-gradient(#8A8577 1.2px,transparent 1.4px);background-size:6px 6px' }), 'Κώλυμα'),
       h('span', null, h('i', { class: 'sw', style: 'background:#D93A3A' }), 'Πρόβλημα'),
@@ -1859,12 +1992,13 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
     }
     function draw() {
       listBox.innerHTML = ''; gridBox.innerHTML = ''; prev.innerHTML = '';
-      PAL_KEYS.filter(function (k) { return isLyceum() || ['dirB', 'dirG', 'zone', 'kontra'].indexOf(k[0]) < 0; }).forEach(function (k) {
+      var KEYS = palKeys(); if (!KEYS.some(function (k) { return k[0] === cur; })) cur = 'A';
+      KEYS.forEach(function (k) {
         var c = draft[k[0]];
         listBox.appendChild(h('button', { class: 'pal-row' + (cur === k[0] ? ' on' : ''), onclick: function () { cur = k[0]; draw(); } },
           h('i', { class: 'pal-chip' + (c ? '' : ' none'), style: c ? 'background:' + c : null }), h('span', null, k[1]), h('small', null, c || 'Χωρίς χρώμα')));
       });
-      var curName = PAL_KEYS.filter(function (k) { return k[0] === cur; })[0][1];
+      var curName = KEYS.filter(function (k) { return k[0] === cur; })[0][1];
       gridBox.appendChild(h('div', { class: 'pal-h' }, 'Χρώμα για: ', h('b', null, curName)));
       gridBox.appendChild(h('div', { class: 'pal-t' }, 'Χρώματα θέματος'));
       gridBox.appendChild(h('div', { class: 'pal-row10' }, XL_THEME.map(function (c) { return sw(c); })));
@@ -1874,7 +2008,13 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
       gridBox.appendChild(h('div', { class: 'pal-row10' }, XL_STD.map(function (c) { return sw(c); })));
       gridBox.appendChild(h('button', { class: 'pal-nofill' + (draft[cur] ? '' : ' on'), onclick: function () { delete draft[cur]; draw(); } }, h('i', { class: 'pal-chip none' }), 'Χωρίς χρώμα'));
       // προεπισκόπηση
-      var sample = [['A', 'Α1', 0], ['B', 'Β2', 0], ['G', 'Γ3', 0], ['langA', 'ΑΓαλ', 1], ['langB', 'ΒΓερμ', 1], ['dirB', 'Βθετ', 1], ['dirG', 'Γθετ', 1, 1], ['kontra', 'Κόντρα', 1], ['', '', 0, 0, 'no'], ['', '', 0, 1], ['A', 'Α2', 0, 0, 'bad']];
+      var dyn = KEYS.filter(function (k) { return /^[gz]:/.test(k[0]); }).slice(0, 6).map(function (k) {
+        var id = k[0].slice(2), isZ = k[0].charAt(0) === 'z', o = isZ ? Engine.zoneList(DB).filter(function (z) { return z.id === id; })[0] : Engine.groupList(DB).filter(function (g) { return g.id === id; })[0];
+        var c0 = o && cls((o.classIds || [])[0]);
+        return [k[0], (c0 && c0.name) || (o && o.name) || '', 1, isZ ? 1 : 0];
+      });
+      var sample = [['A', 'Α1', 0], ['B', 'Β2', 0], ['G', 'Γ3', 0]].concat(dyn).concat([['', '', 0, 0, 'no'], ['A', 'Α2', 0, 0, 'bad']]);
+      if (Engine.zoneList(DB).length) sample.splice(sample.length - 2, 0, ['', '', 0, 1]);
       var row = h('div', { class: 'pal-pg' });
       sample.forEach(function (x) {
         var cell = h('div', { class: 'cell' + (x[4] === 'no' ? ' no' : '') + (x[3] ? ' zone' : '') });
@@ -1885,9 +2025,9 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
       });
       prev.appendChild(h('div', { class: 'pal-t' }, 'Προεπισκόπηση'));
       prev.appendChild(row);
-      prev.appendChild(h('div', { class: 'pal-cap' }, h('span', null, 'Α΄ · Β΄ · Γ΄'), h('span', null, 'γλώσσες · κατευθύνσεις · Κόντρα (μικτά: έντονο περίγραμμα)'), h('span', null, 'ζώνη · κώλυμα · πρόβλημα')));
+      prev.appendChild(h('div', { class: 'pal-cap' }, h('span', null, 'Α΄ · Β΄ · Γ΄'), h('span', null, 'ταυτόχρονα · ζώνες (μικτά: ριγέ)'), h('span', null, 'κώλυμα · πρόβλημα')));
       var big = h('div', { class: 'pal-pg big' });
-      [['A', 'Α1'], ['langA', 'ΑΓαλ', 1], ['dirB', 'Βθετ', 1], ['G', 'Γ1'], ['dirG', 'Γθετ', 1, 1], ['dirG', 'Γθετ', 1, 1], ['kontra', 'Κόντρα', 1], ['B', 'Β3']].forEach(function (x) {
+      [['A', 'Α1'], ['G', 'Γ1']].concat(dyn.slice(0, 4)).concat([['B', 'Β3']]).forEach(function (x) {
         var cell = h('div', { class: 'cell' + (x[3] ? ' zone' : '') }); if (x[3] && draft.zone) cell.style.background = draft.zone;
         var t = paintTag(h('div', { class: 'tag fA' }, x[1]), x[0], !!x[2], draft); cell.appendChild(t); big.appendChild(cell);
       });
@@ -1989,12 +2129,13 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
   function cellEl(t, s, idxs, an) {
     var H = DB.settings.hours, d = Math.floor(s / H), hr = s % H;
     var k = d + '-' + hr, av = (t.avail || {})[k];
-    var c = h('div', { class: 'cell' + (ui.hlRow === t.id ? ' hl' : '') + (s % H === 0 ? ' d0' : '') + (an.gapCells[DB.teachers.indexOf(t) + ':' + s] ? ' gapc' : '') + (av === 'pref' ? ' pref' : '') + (av === 'no' ? ' no' : '') + (inZoneSlot(s) ? ' zone' : '') });
+    var c = h('div', { class: 'cell' + (ui.hlRow === t.id ? ' hl' : '') + (s % H === 0 ? ' d0' : '') + (an.gapCells[DB.teachers.indexOf(t) + ':' + s] ? ' gapc' : '') + (av === 'pref' ? ' pref' : '') + (av === 'no' ? ' no' : '') + (inZoneSlot(s) ? ' zone' : '') + (Engine.isClosed(DB, d, hr) ? ' closed' : '') });
     if (inZoneSlot(s) && zoneColor()) c.style.background = zoneColor();
     var e = idxs.length ? DB.schedule[idxs[0]] : null, a = e ? byId(DB.assignments, e.aid) : null;
     var tag = h('div', { class: 'tag' });
     var title = DAYS[d] + ' ' + (hr + 1) + 'η ώρα';
     if (av === 'no') title += ' · δεν μπορεί'; else if (av === 'pref') title += ' · καλύτερα όχι';
+    if (Engine.isClosed(DB, d, hr)) title += ' · το σχολείο δεν λειτουργεί';
     if (a) {
       var probs = an.bad[DB.teachers.indexOf(t) + ':' + s] || [];
       tag.className = 'tag ' + asgFamily(a) + (asgIsGroup(a) ? ' grp' : '') + (e.locked ? ' lock' : '') + (probs.length ? ' bad' : '') +
@@ -2160,20 +2301,17 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
   /* ---------- αυτόματη συμπλήρωση ---------- */
   function autofillDialog() {
     // Δεν ξεκινά χωρίς (σωστές) ζώνες κατεύθυνσης Γ΄, όταν υπάρχουν μαθήματα κατεύθυνσης Γ΄
-    var hasDirG = DB.classes.some(function (c) { return c.kind === 'mixed' && c.category === 'dirG' && DB.assignments.some(function (a) { return a.classIds[0] === c.id; }); });
-    if (hasDirG) {
-      var zc = Engine.checkZones(DB);
-      if (!zc.total || zc.errors.length) {
-        var m0 = modal([h('header', null, h('h2', null, 'Δεν μπορεί να ξεκινήσει η αυτόματη συμπλήρωση')),
-          h('div', { class: 'body' },
-            h('div', { style: 'line-height:1.55' }, !zc.total ? 'Δεν έχουν οριστεί οι ζώνες κατεύθυνσης Γ΄ Λυκείου.' : 'Οι ζώνες κατεύθυνσης Γ΄ Λυκείου χρειάζονται διόρθωση:'),
-            zc.errors.length ? h('div', { class: 'warns' }, zc.errors.map(function (e) { return h('div', { class: 'warn error' }, e); })) : null,
-            h('div', { class: 'sub' }, 'Όρισε τις ζώνες στη σελίδα «Τμήματα» → «Ζώνες κατεύθυνσης Γ΄ Λυκείου» και ξαναδοκίμασε.')),
-          h('footer', null, h('span'), h('div', { class: 'row' },
-            h('button', { class: 'btn', onclick: function () { m0.close(); } }, 'Κλείσιμο'),
-            h('button', { class: 'btn pri', onclick: function () { m0.close(); ui.page = 'classes'; ui.classId = '__zones'; ui.classDraft = null; render(); } }, 'Πήγαινε στις ζώνες')))], true);
-        return;
-      }
+    var zbad = Engine.checkZones(DB).filter(function (z) { return z.errors.length; });
+    if (zbad.length) {
+      var m0 = modal([h('header', null, h('h2', null, 'Δεν μπορεί να ξεκινήσει η αυτόματη συμπλήρωση')),
+        h('div', { class: 'body' },
+          h('div', { style: 'line-height:1.55' }, 'Οι ζώνες χρειάζονται διόρθωση:'),
+          h('div', { class: 'warns' }, zbad.map(function (z) { return z.errors.map(function (e) { return h('div', { class: 'warn error' }, e); }); })),
+          h('div', { class: 'sub' }, 'Όρισε τις ώρες της ζώνης στη σελίδα «Τμήματα» και ξαναδοκίμασε.')),
+        h('footer', null, h('span'), h('div', { class: 'row' },
+          h('button', { class: 'btn', onclick: function () { m0.close(); } }, 'Κλείσιμο'),
+          h('button', { class: 'btn pri', onclick: function () { m0.close(); ui.page = 'classes'; ui.classId = '__zone:' + zbad[0].id; ui.classDraft = null; render(); } }, 'Πήγαινε στη ζώνη')))], true);
+      return;
     }
     var pre = Engine.precheck(DB), errs = pre.filter(function (x) { return x.level === 'error'; });
     var secs = DB.settings.solverSeconds || 30, keep = false;
@@ -2334,34 +2472,37 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
     }
     if (cp.rows.length) buildPrintClasses(P, cp, total);
   }
-  // Γραμμές της σελίδας τμημάτων: κανονικά τμήματα, μετά κατεύθυνση Β΄ και κατεύθυνση Γ΄.
-  // Τα Κόντρα (και τα κοινά, π.χ. ΓΘΓΥγ) φαίνονται στις γραμμές των κατευθύνσεων στις οποίες χρεώνονται.
+  // Γραμμές της σελίδας τμημάτων: κανονικά τμήματα, μετά μία ενότητα για κάθε ζώνη και κάθε ομάδα «ταυτόχρονα»
+  // με «χωριστές γραμμές στην εκτύπωση». Ό,τι χρεώνεται σε αυτά (π.χ. Κόντρα, κοινά τμήματα) φαίνεται στις γραμμές τους.
   function classPrintRows() {
     var H = DB.settings.hours, rows = [];
-    var isDirCat = function (c) { return c && c.kind === 'mixed' && (c.category === 'dirB' || c.category === 'dirG' || c.category === 'kontra'); };
-    var isDirRow = function (c) { return c.kind === 'mixed' && (c.category === 'dirB' || c.category === 'dirG') && (c.members || []).length && (c.members || []).every(function (mb) { var x = cls(mb); return x && x.kind !== 'mixed'; }); };
-    var plain = DB.classes.filter(function (c) { return c.kind !== 'mixed' || !(c.members || []).length; }).sort(sortNatural);
-    var dirB = DB.classes.filter(function (c) { return isDirRow(c) && c.category === 'dirB'; }).sort(sortNatural);
-    var dirG = DB.classes.filter(function (c) { return isDirRow(c) && c.category === 'dirG'; }).sort(sortNatural);
-    var cells = function () { var m = {}; return m; };
+    var plainOnly = function (c) { return isMixed(c) && (c.members || []).every(function (mb) { var x = cls(mb); return x && !isMixed(x); }); };
+    var secs = Engine.zoneList(DB).map(function (z) { return { name: z.name || 'Ζώνη', ids: z.classIds || [] }; })
+      .concat(Engine.groupList(DB).filter(function (g) { return g.printRows; }).map(function (g) { return { name: g.name || '', ids: g.classIds || [] }; }));
+    secs.forEach(function (sc) {
+      sc.rows = sc.ids.map(cls).filter(function (c) { return c && plainOnly(c); }).sort(sortNatural);
+      sc.mark = /^κατε[υύ]θ/i.test(sc.name) ? 'κατ.' : sc.name.replace(/\s+/g, '').slice(0, 4) + '.';
+    });
+    secs = secs.filter(function (sc) { return sc.rows.length; });
+    var secOf = function (c) {   // σε ποια ενότητα ανήκει ένα μάθημα (το ίδιο ή μέσω χρέωσης)
+      for (var i = 0; i < secs.length; i++) if (secs[i].rows.some(function (r) { return r.id === c.id || (isMixed(c) && dependsOn(c, r.id)); })) return secs[i];
+      return null;
+    };
+    var plain = DB.classes.filter(function (c) { return !isMixed(c); }).sort(sortNatural);
     var add = function (m, s, t) { var nm = t ? upperGr((t.surname || tName(t)).trim()) : ''; if (!nm) return; var L = m[s] || (m[s] = []); if (L.indexOf(nm) < 0) L.push(nm); };
-    var plainMap = {}, dirMark = {}, dirMap = {};
+    var plainMap = {}, mark = {}, rowMap = {};
     DB.schedule.forEach(function (e) {
       var a = byId(DB.assignments, e.aid); if (!a) return;
       var c = cls(a.classIds[0]); if (!c) return;
-      var t = byId(DB.teachers, a.teacherId), s = e.d * H + e.h;
-      var dirish = isDirCat(c) || (c.kind === 'mixed' && (c.members || []).some(function (mb) { return isDirCat(cls(mb)); }));
-      // κανονικά τμήματα
-      (c.kind === 'mixed' && (c.members || []).length ? Engine.baseClasses(DB, c.id) : [c.id]).forEach(function (b) {
-        if (dirish) { (dirMark[b] = dirMark[b] || {})[s] = 1; return; }
+      var t = byId(DB.teachers, a.teacherId), s = e.d * H + e.h, sc = secOf(c);
+      (isMixed(c) ? Engine.baseClasses(DB, c.id) : [c.id]).forEach(function (b) {
+        if (sc) { (mark[b] = mark[b] || {})[s] = sc.mark; return; }
         add(plainMap[b] = plainMap[b] || {}, s, t);
       });
-      // γραμμές κατευθύνσεων: το ίδιο το τμήμα ή ό,τι χρεώνεται σε αυτό (Κόντρα, κοινά)
-      dirB.concat(dirG).forEach(function (r) { if (c.id === r.id || (c.kind === 'mixed' && dependsOn(c, r.id))) add(dirMap[r.id] = dirMap[r.id] || {}, s, t); });
+      if (sc) sc.rows.forEach(function (r) { if (c.id === r.id || (isMixed(c) && dependsOn(c, r.id))) add(rowMap[r.id] = rowMap[r.id] || {}, s, t); });
     });
-    plain.forEach(function (c) { rows.push({ name: c.name, map: plainMap[c.id] || {}, mark: dirMark[c.id] || {} }); });
-    if (dirB.length) { rows.push({ sep: 'Κατεύθυνση Β΄' }); dirB.forEach(function (c) { rows.push({ name: c.name, map: dirMap[c.id] || {}, mark: {}, dir: true }); }); }
-    if (dirG.length) { rows.push({ sep: 'Κατεύθυνση Γ΄ (μαζί και τα Κόντρα)' }); dirG.forEach(function (c) { rows.push({ name: c.name, map: dirMap[c.id] || {}, mark: {}, dir: true }); }); }
+    plain.forEach(function (c) { rows.push({ name: c.name, map: plainMap[c.id] || {}, mark: mark[c.id] || {} }); });
+    secs.forEach(function (sc) { rows.push({ sep: sc.name }); sc.rows.forEach(function (c) { rows.push({ name: c.name, map: rowMap[c.id] || {}, mark: {}, dir: true }); }); });
     return { rows: rows };
   }
   // Σελίδα τμημάτων: σε κάθε ώρα τα επώνυμα των εκπαιδευτικών, οριζόντια (μικραίνουν / αναδιπλώνονται όσο χρειάζεται)
@@ -2397,7 +2538,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
             return h('div', null, x.slice(0, k), h('br'), x.slice(k));
           }));
         }
-        if (r.mark[s]) return h('td', { class: cl + ' kt' }, 'κατ.');
+        if (r.mark[s]) return h('td', { class: cl + ' kt' }, r.mark[s]);
         return h('td', { class: cl + (r.dir ? '' : ' ms') });
       });
       return h('tr', null, h('td', { class: 'nmc', style: 'height:' + rowH.toFixed(2) + 'mm' }, r.name), tds);
@@ -2771,16 +2912,37 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
   function secHours(id) { var n = 0; DB.assignments.forEach(function (a) { if (a.classIds[0] === id && byId(DB.teachers, a.teacherId)) n += a.hours; }); return n; }
   // όλο το σετ «ταυτόχρονα» ενός μικτού τμήματος (μεταβατικά)
   function syncGroupOf(c) { var info = Engine.syncSets(DB), si = info.setOf[c.id]; return si === undefined || (info.merges[si] || []).indexOf(c.id) >= 0 ? [c.id] : info.sets[si]; }
-  var CATS = [['lang', 'Ξένη γλώσσα'], ['dirB', 'Κατεύθυνση Β΄ Λυκείου'], ['dirG', 'Κατεύθυνση Γ΄ Λυκείου'], ['kontra', 'Κόντρα'], ['', 'Άλλο']];
-  function isLyceum() { return (DB.school.type || 'lyceum') === 'lyceum'; }
-  function cats() { return isLyceum() ? CATS : CATS.filter(function (x) { return x[0] === 'lang' || x[0] === ''; }); }
-  function catName(k) { var c = CATS.filter(function (x) { return x[0] === k; })[0]; return c && k ? c[1] : ''; }
+  // Σε ποιες ομάδες «ταυτόχρονα» / ζώνες ανήκει ένα τμήμα
+  function membershipOf(id) {
+    var out = [];
+    Engine.groupList(DB).forEach(function (g) { if ((g.classIds || []).indexOf(id) >= 0) out.push({ kind: 'g', o: g }); });
+    Engine.zoneList(DB).forEach(function (z) { if ((z.classIds || []).indexOf(id) >= 0) out.push({ kind: 'z', o: z }); });
+    return out;
+  }
+  function namesOf(ids) { return (ids || []).map(function (q) { var y = cls(q); return y ? y.name : ''; }).filter(Boolean).sort(function (a, b) { return a.localeCompare(b, 'el', { numeric: true }); }); }
+  // Πλέγμα ημερών × ωρών με κλικ (ώρες λειτουργίας, ώρες ζώνης)
+  function hoursGrid(o) {
+    var D = o.days, H = o.hours, g = h('div', { class: 'wk', style: 'grid-template-columns:86px repeat(' + H + ',minmax(0,1fr))' });
+    g.appendChild(h('div'));
+    for (var hh = 0; hh < H; hh++) g.appendChild(h('div', { class: 'h' }, (hh + 1) + 'η'));
+    for (var d = 0; d < D; d++) (function (d) {
+      g.appendChild(h('div', { class: 'd' }, DAYS[d]));
+      for (var hh = 0; hh < H; hh++) (function (hh) {
+        if (o.disabled && o.disabled(d, hh)) { g.appendChild(h('button', { class: 'sl never', disabled: true, style: 'opacity:.45;cursor:default', title: DAYS[d] + ' ' + (hh + 1) + 'η: το σχολείο δεν λειτουργεί', 'aria-label': DAYS[d] + ' ' + (hh + 1) + 'η: κλειστό' }, '')); return; }
+        var on = o.isOn(d, hh), b = h('button', { class: 'sl ' + (on ? 'must' : 'any'), 'aria-pressed': on ? 'true' : 'false', 'aria-label': DAYS[d] + ' ' + (hh + 1) + 'η: ' + (on ? o.onText : o.offText),
+          onclick: function () { o.toggle(d, hh); } }, on ? '●' : '');
+        if (o.mark) o.mark(d, hh, b);
+        g.appendChild(b);
+      })(hh);
+    })(d);
+    return g;
+  }
   // Οι αλλαγές σε ένα τμήμα γίνονται σε «πρόχειρο» και περνούν με «Αποθήκευση αλλαγών».
   function classDraftDirty() {
     var d = ui.classDraft; if (!d) return false;
     if (d.isNew) return true;
     var c = cls(d.id); if (!c) return false;
-    var pick = function (x) { return JSON.stringify({ n: (x.name || '').trim(), k: x.kind, m: (x.members || []).slice().sort(), c: x.category || '' }); };
+    var pick = function (x) { return JSON.stringify({ n: (x.name || '').trim(), k: x.kind, m: (x.members || []).slice().sort() }); };
     return pick(c) !== pick(d);
   }
   function guardClassDraft(go) { guardDrafts(go); }
@@ -2820,50 +2982,64 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
     if (DB.classes.some(function (x) { return x.id !== d.id && fold(x.name) === fold(name); })) { toast('Υπάρχει ήδη τμήμα με το όνομα «' + name + '».', true); return false; }
     if (d.kind === 'mixed' && !(d.members || []).length) { toast('Διάλεξε σε ποια τμήματα χρεώνεται το μικτό τμήμα.', true); return false; }
     var c = d.isNew ? null : cls(d.id);
-    if (!c) { c = { id: d.id, name: '', kind: 'class', members: [], syncWith: [], category: '' }; DB.classes.push(c); }
-    var catChanged = (c.category || '') !== (d.category || '') || c.kind !== d.kind;
+    if (!c) { c = { id: d.id, name: '', kind: 'class', members: [] }; DB.classes.push(c); }
     c.name = name; c.kind = d.kind;
-    if (d.kind === 'mixed') { c.members = d.members.slice(); c.category = d.category || ''; }
-    else { c.members = []; c.category = ''; }
-    if (catChanged) {   // η κατηγορία αντικαθιστά τις παλιές χειροκίνητες συνδέσεις
-      c.syncWith = []; DB.classes.forEach(function (y) { y.syncWith = (y.syncWith || []).filter(function (q) { return q !== c.id; }); });
-    }
+    c.members = d.kind === 'mixed' ? d.members.slice() : [];
     ui.classId = c.id; ui.classDraft = null; commit(); toast('Οι αλλαγές αποθηκεύτηκαν.');
     return true;
   }
   function pageClasses(main) {
-    var zonesView = ui.classId === '__zones';
-    var c = !zonesView && ui.classId && (ui.classId === '__new' ? null : cls(ui.classId));
-    if (!c && !zonesView && ui.classId !== '__new' && DB.classes.length) { c = DB.classes.slice().sort(sortNatural)[0]; ui.classId = c.id; }
+    var zoneView = /^__zone:/.test(ui.classId || '') ? Engine.zoneList(DB).filter(function (z) { return '__zone:' + z.id === ui.classId; })[0] : null;
+    if (/^__zone:/.test(ui.classId || '') && !zoneView) ui.classId = null;
+    var c = !zoneView && ui.classId && (ui.classId === '__new' ? null : cls(ui.classId));
+    if (!c && !zoneView && ui.classId !== '__new' && DB.classes.length) { c = DB.classes.slice().sort(sortNatural)[0]; ui.classId = c.id; }
     if (ui.classId === '__new' && ui.classDraft && ui.classDraft.isNew) c = ui.classDraft;
-    if (c && (!ui.classDraft || ui.classDraft.id !== c.id)) ui.classDraft = { id: c.id, name: c.name || '', kind: c.kind === 'mixed' ? 'mixed' : 'class', members: (c.members || []).slice(), category: c.category || '', syncWith: (c.syncWith || []).slice() };
+    if (c && (!ui.classDraft || ui.classDraft.id !== c.id)) ui.classDraft = { id: c.id, name: c.name || '', kind: c.kind === 'mixed' ? 'mixed' : 'class', members: (c.members || []).slice() };
     var draft = ui.classDraft;
     var plain = DB.classes.filter(function (x) { return !isMixed(x); }).sort(sortNatural), mixed = DB.classes.filter(isMixed).sort(sortNatural);
     var zc = Engine.checkZones(DB), zconf = Engine.zoneConflicts(DB);
     var item = function (x) {
       var n = DB.assignments.filter(function (a) { return a.classIds.indexOf(x.id) >= 0; }).length, sub;
       if (isMixed(x)) {
-        var g = syncGroupOf(x).filter(function (id) { return id !== x.id; }).map(function (id) { return cls(id).name; });
-        sub = (x.category ? catName(x.category) + ' · ' : '') + 'χρεώνεται: ' + (x.members.map(function (m) { var y = cls(m); return y ? y.name : ''; }).join(', ') || '—') + (g.length ? ' · μαζί με ' + g.join(', ') : '');
+        var ms = membershipOf(x.id).map(function (q) { return q.o.name || (q.kind === 'z' ? 'Ζώνη' : 'Ταυτόχρονα'); });
+        sub = 'χρεώνεται: ' + (x.members.map(function (m) { var y = cls(m); return y ? y.name : ''; }).join(', ') || '—') + (ms.length ? ' · ' + ms.join(', ') : '');
       } else sub = n + ' αναθέσεις';
       return h('button', { class: 'li' + (c && x.id === c.id ? ' on' : ''), onclick: function () { if (c && x.id === c.id) return; guardClassDraft(function () { ui.classId = x.id; render(); }); } }, h('b', null, x.name || 'Χωρίς όνομα'), h('small', null, sub));
     };
+    var boxStyle = 'background:var(--card);border:1px solid #D9D2C2;box-shadow:0 1px 2px rgba(27,35,64,.06)';
+    var zoneItem = function (z) {
+      var r = zc.filter(function (x) { return x.id === z.id; })[0] || { total: 0, errors: [] }, bad = r.errors.length || zconf.some(function (x) { return x.zoneId === z.id; });
+      var on = zoneView && zoneView.id === z.id;
+      return h('button', { class: 'li' + (on ? ' on' : ''), style: boxStyle, onclick: function () { guardClassDraft(function () { ui.classId = '__zone:' + z.id; render(); }); } },
+        h('b', null, 'Ζώνη: ' + (z.name || 'χωρίς όνομα')),
+        h('small', { style: bad ? 'color:#B3261E' : '' }, (r.total ? r.total + ' ώρες' : 'χωρίς ώρες ακόμα') + ' · ' + ((z.classIds || []).length ? namesOf(z.classIds).join(', ') : 'χωρίς μαθήματα') + (bad ? ' · χρειάζεται διόρθωση' : '')));
+    };
+    var groupItem = function (g) {
+      var hrs = (g.classIds || []).map(function (id) { return secHours(id); }), uneq = hrs.length > 1 && hrs.some(function (x) { return x !== hrs[0]; });
+      return h('button', { class: 'li', style: boxStyle, onclick: function () { guardClassDraft(function () { groupDialog(g); }); } },
+        h('b', null, g.name || 'Ταυτόχρονα'),
+        h('small', { style: uneq ? 'color:#B3261E' : '' }, ((g.classIds || []).length ? namesOf(g.classIds).join(' · ') : 'χωρίς τμήματα') + (+g.maxHour > 0 ? ' · έως ' + g.maxHour + 'η ώρα' : '') + (uneq ? ' · άνισες ώρες' : '')));
+    };
+    var zones = Engine.zoneList(DB), groups = Engine.groupList(DB);
     var list = h('div', { class: 'list' },
       h('div', { class: 'row', style: 'justify-content:space-between' }, h('h2', null, 'Τμήματα')),
       h('div', { class: 'row', style: 'gap:8px' }, h('button', { class: 'btn sm', onclick: function () { newClass('class'); } }, icon('plus', 14), 'Νέο τμήμα'),
         h('button', { class: 'btn sm', onclick: function () { guardClassDraft(quickClasses); } }, 'Γρήγορα Α1–Γ3')),
-      !isLyceum() ? null : h('button', { class: 'li' + (zonesView ? ' on' : ''), style: 'background:var(--card);border:1px solid #D9D2C2;box-shadow:0 1px 2px rgba(27,35,64,.06)', onclick: function () { guardClassDraft(function () { ui.classId = '__zones'; render(); }); } },
-        h('b', null, 'Ζώνες κατεύθυνσης Γ΄ Λυκείου'),
-        h('small', { style: zc.errors.length || zconf.length ? 'color:#B3261E' : '' }, zc.total ? zc.total + (zc.hours ? ' / ' + zc.hours : '') + ' ώρες' + (zc.errors.length || zconf.length ? ' · χρειάζεται διόρθωση' : ' · εντάξει') : 'δεν έχουν δηλωθεί')),
-      h('div', { class: 'items' }, plain.length ? h('div', { class: 'secl' }, 'Τμήματα') : null, plain.map(item), mixed.length ? h('div', { class: 'secl' }, 'Μικτά τμήματα') : null, mixed.map(item)));
-    if (zonesView) {
-      main.appendChild(header('Τμήματα', 'Ζώνες κατεύθυνσης Γ΄ Λυκείου', []));
-      main.appendChild(h('div', { class: 'split' }, list, h('div', { class: 'detail' }, h('div', { style: 'max-width:900px' }, zonesCard()))));
+      h('div', { class: 'row', style: 'gap:8px' },
+        h('button', { class: 'btn sm', title: 'Τμήματα που κάνουν μάθημα την ίδια ώρα (π.χ. ξένες γλώσσες, Κόντρα)', onclick: function () { guardClassDraft(function () { groupDialog(null); }); } }, icon('plus', 14), 'Μαθήματα που γίνονται ταυτόχρονα'),
+        h('button', { class: 'btn sm', title: 'Ώρες της εβδομάδας όπου γίνονται μόνο ορισμένα μαθήματα', onclick: function () { guardClassDraft(newZoneDialog); } }, icon('plus', 14), 'Ζώνη')),
+      h('div', { class: 'items' },
+        groups.length ? h('div', { class: 'secl' }, 'Μαθήματα που γίνονται ταυτόχρονα') : null, groups.map(groupItem),
+        zones.length ? h('div', { class: 'secl' }, 'Ζώνες') : null, zones.map(zoneItem),
+        plain.length ? h('div', { class: 'secl' }, 'Τμήματα') : null, plain.map(item), mixed.length ? h('div', { class: 'secl' }, 'Μικτά τμήματα') : null, mixed.map(item)));
+    if (zoneView) {
+      main.appendChild(header('Τμήματα', 'Ζώνη «' + (zoneView.name || '') + '»', [h('button', { class: 'btn dng', onclick: function () { deleteZone(zoneView); } }, icon('trash', 16), 'Διαγραφή ζώνης')]));
+      main.appendChild(h('div', { class: 'split' }, list, h('div', { class: 'detail' }, h('div', { style: 'max-width:900px' }, zoneCard(zoneView)))));
       return;
     }
     if (!c) {
       main.appendChild(header('Τμήματα', 'Κανένα τμήμα ακόμα', [h('button', { class: 'btn pri', onclick: quickClasses }, icon('plus', 16), 'Γρήγορη δημιουργία Α1–Γ3')]));
-      main.appendChild(h('div', { class: 'empty' }, h('div', null, 'Ξεκίνα με τα τμήματα (Α1, Α2…). Μετά φτιάξε τα μικτά τμήματα, π.χ. ΑΓαλ / ΑΓερμ ή τα μαθήματα προσανατολισμού.'),
+      main.appendChild(h('div', { class: 'empty' }, h('div', null, 'Ξεκίνα με τα τμήματα (Α1, Α2…). Μετά φτιάξε τα μικτά τμήματα (π.χ. ξένες γλώσσες, μαθήματα επιλογής) και δήλωσε ποια γίνονται ταυτόχρονα.'),
         h('div', { class: 'row' }, h('button', { class: 'btn', onclick: function () { newClass('class'); } }, icon('plus', 16), 'Νέο τμήμα'), h('button', { class: 'btn pri', onclick: quickClasses }, 'Γρήγορη δημιουργία Α1–Γ3'))));
       return;
     }
@@ -2879,7 +3055,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
     var nameInp = h('input', { class: 'inp', value: draft.name, placeholder: mx ? 'π.χ. ΑΓαλ, ΑΓερμ2, ΓΘετ' : 'π.χ. Α1' });
     nameInp.addEventListener('input', function () { draft.name = nameInp.value; var dd = classDraftDirty(); saveBtn.disabled = !dd; undoBtn.disabled = !dd || isNew; dirtyNote.textContent = dd ? 'Υπάρχουν αλλαγές που δεν αποθηκεύτηκαν.' : 'Όλα αποθηκευμένα.'; dirtyNote.style.color = dd ? '#7A4A0B' : 'var(--muted2)'; });
     nameInp.addEventListener('keydown', function (e) { if (e.key === 'Enter') saveClassDraft(); });
-    var setKind = function (k) { draft.kind = k; if (k === 'class') { draft.members = []; draft.category = ''; } render(); };
+    var setKind = function (k) { draft.kind = k; if (k === 'class') draft.members = []; render(); };
     var card = h('section', { class: 'card', style: 'max-width:900px' },
       h('div', { style: 'display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end' },
         h('label', { class: 'f', style: 'flex:1 1 260px' }, h('span', null, 'Όνομα (όπως το λέτε στο σχολείο — έτσι γράφεται και στο md)'), nameInp),
@@ -2900,7 +3076,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
           }))));
       }
     } else {
-      var mixedOthers = DB.classes.filter(function (x) { return x.id !== draft.id && x.kind === 'mixed' && x.category !== 'kontra' && !dependsOn(x, draft.id); }).sort(sortNatural);
+      var mixedOthers = DB.classes.filter(function (x) { return x.id !== draft.id && x.kind === 'mixed' && !dependsOn(x, draft.id); }).sort(sortNatural);
       var memberChip = function (x) {
         var on = draft.members.indexOf(x.id) >= 0;
         return h('button', { class: 'cch ' + family(x) + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false', onclick: function () { if (on) draft.members.splice(draft.members.indexOf(x.id), 1); else draft.members.push(x.id); render(); } }, x.name);
@@ -2922,14 +3098,14 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
           mixedOthers.length ? h('div', { class: 'sub' }, 'ή σε μικτά τμήματα (π.χ. «Κόντρα» που χρεώνεται σε μάθημα κατεύθυνσης Γ΄)') : null,
           mixedOthers.length ? h('div', { class: 'chk' }, mixedOthers.map(memberChip)) : null,
           h('div', { class: 'sub' }, 'Οι ώρες του μετράνε στις ώρες αυτών των τμημάτων, και δεν μπαίνει ποτέ την ίδια ώρα με άλλο μάθημά τους.')),
-        h('div', { class: 'f' }, h('span', null, 'Τι είναι'),
-          h('div', { class: 'seg', role: 'radiogroup', 'aria-label': 'Κατηγορία μικτού τμήματος' }, cats().map(function (x) {
-            var on = (draft.category || '') === x[0];
-            return h('button', { class: on ? 'on' : '', role: 'radio', 'aria-checked': on ? 'true' : 'false', onclick: function () { draft.category = x[0]; render(); } }, x[1]);
-          })),
-          h('div', { class: 'sub', style: 'line-height:1.5' }, 'Μικτά τμήματα της ίδιας κατηγορίας που χρεώνονται σε κοινά τμήματα γίνονται αυτόματα την ίδια ώρα (π.χ. ΑΓαλ και ΑΓερμ στα Α1, Α2). «Άλλο» = χωρίς υποχρέωση ίδιας ώρας.')),
-        draft.category === 'dirB' ? h('div', { class: 'warn info' }, 'Η κατεύθυνση Β΄ μπαίνει μόνο από 1η έως 5η ώρα — ποτέ 6η και 7η.') : null,
-        !draft.category && (draft.syncWith || []).length ? h('div', { class: 'warn' }, 'Παλιά σύνδεση «ταυτόχρονα» με: ' + draft.syncWith.map(function (q) { var y = cls(q); return y ? y.name : ''; }).join(', ') + '. Διάλεξε κατηγορία για να γίνεται αυτόματα.') : null,
+        (function () {
+          var ms = isNew ? [] : membershipOf(draft.id);
+          return h('div', { class: 'f' }, h('span', null, 'Ταυτόχρονα / ζώνη'),
+            ms.length ? h('div', { class: 'chk' }, ms.map(function (q) {
+              return h('button', { class: 'cch on', onclick: function () { if (q.kind === 'g') guardClassDraft(function () { groupDialog(q.o); }); else guardClassDraft(function () { ui.classId = '__zone:' + q.o.id; render(); }); } }, (q.kind === 'z' ? 'Ζώνη: ' : '') + (q.o.name || ''));
+            })) : h('div', { class: 'sub' }, 'Δεν ανήκει σε ομάδα «ταυτόχρονα» ούτε σε ζώνη.'),
+            h('div', { class: 'sub', style: 'line-height:1.5' }, 'Αν γίνεται την ίδια ώρα με άλλα τμήματα (π.χ. ΑΓαλ με ΑΓερμ), δήλωσέ το με «Μαθήματα που γίνονται ταυτόχρονα» στη λίστα αριστερά.'));
+        })(),
         !draft.members.length ? h('div', { class: 'warn error' }, 'Διάλεξε σε ποια τμήματα χρεώνεται — χωρίς αυτό το μικτό τμήμα δεν αποθηκεύεται.') : null,
         isMerge ? h('div', { class: 'warn info' }, 'Κοινό τμήμα: οι ώρες του γίνονται μαζί για ' + memOf(draft.id).map(function (id) { var y = cls(id); return y ? y.name : ''; }).join(' + ') + '. Τις υπόλοιπες ώρες τους τα τμήματα αυτά τις κάνουν χωριστά, την ίδια ώρα.') : null,
         grp.length > 1 ? h('div', { class: 'warn ' + (unequal ? 'error' : 'info') }, 'Γίνεται αυτόματα ταυτόχρονα: ' + hrs.map(function (x) { return x.c ? x.n + ' ώρ.)' : x.n + ' (' + x.h + ' ώρ.)'; }).join(' · ') + (unequal ? ' — οι ώρες πρέπει να είναι ίσες.' : '')) : null]);
@@ -2938,39 +3114,129 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
     main.appendChild(h('div', { class: 'split' }, list, h('div', { class: 'detail' }, card)));
     if (isNew) setTimeout(function () { nameInp.focus(); }, 30);
   }
-  // Ζώνες κατεύθυνσης Γ΄ (κοινές για όλα τα μικτά τμήματα «Κατεύθυνση Γ΄»): μόνο 1η–5η, συνεχόμενες κάθε μέρα
-  function zonesCard() {
-    var z = DB.settings.zonesG = DB.settings.zonesG || [], D = DB.settings.days, H = Math.min(5, DB.settings.hours), chk = Engine.checkZones(DB);
-    var g = h('div', { class: 'wk', style: 'grid-template-columns:86px repeat(' + H + ',minmax(0,1fr))' });
-    g.appendChild(h('div'));
-    for (var hh = 0; hh < H; hh++) g.appendChild(h('div', { class: 'h' }, (hh + 1) + 'η'));
-    for (var d = 0; d < D; d++) (function (d) {
-      g.appendChild(h('div', { class: 'd' }, DAYS[d]));
-      for (var hh = 0; hh < H; hh++) (function (hh) {
-        var k = d + '-' + hh, on = z.indexOf(k) >= 0;
-        g.appendChild(h('button', { class: 'sl ' + (on ? 'must' : 'any'), 'aria-pressed': on ? 'true' : 'false', 'aria-label': DAYS[d] + ' ' + (hh + 1) + 'η: ' + (on ? 'ζώνη κατεύθυνσης' : 'όχι'),
-          onclick: function () { if (on) z.splice(z.indexOf(k), 1); else z.push(k); commit(); } }, on ? '●' : ''));
-      })(hh);
-    })(d);
-    var conf = Engine.zoneConflicts(DB), confKeys = {}; conf.forEach(function (x) { (x.keys || []).forEach(function (k) { (confKeys[k] = confKeys[k] || []).push(x.teacher); }); });
-    if (conf.length) g.querySelectorAll('button.sl').forEach(function (b) {
-      var lab = b.getAttribute('aria-label') || '';
-      Object.keys(confKeys).forEach(function (k) { var d = +k.split('-')[0], hh = +k.split('-')[1]; if (lab.indexOf(DAYS[d] + ' ' + (hh + 1) + 'η:') === 0) { b.style.boxShadow = 'inset 0 0 0 3px #B3261E'; b.title = 'Κώλυμα: ' + confKeys[k].join(', '); } });
-    });
+  // Ζώνη: ώρες της εβδομάδας όπου μπαίνουν ΜΟΝΟ τα μαθήματα της ζώνης· μέσα στη ζώνη δεν μπαίνει άλλο μάθημα της ίδιας τάξης
+  function zoneCard(z) {
+    z.slots = z.slots || []; z.classIds = z.classIds || [];
+    var chk = Engine.checkZones(DB).filter(function (x) { return x.id === z.id; })[0] || { total: 0, errors: [], warns: [], perDay: [], hours: 0 };
+    var conf = Engine.zoneConflicts(DB).filter(function (x) { return x.zoneId === z.id; }), confKeys = {};
+    conf.forEach(function (x) { (x.keys || []).forEach(function (k) { (confKeys[k] = confKeys[k] || []).push(x.teacher); }); });
+    var nameInp = h('input', { class: 'inp', value: z.name || '', placeholder: 'π.χ. Κατεύθυνση Γ΄' });
+    nameInp.addEventListener('change', function () { var v = nameInp.value.trim(); if (v) { z.name = v; commit(); } else nameInp.value = z.name || ''; });
+    var g = hoursGrid({ days: DB.settings.days, hours: DB.settings.hours, onText: 'ώρα της ζώνης', offText: 'όχι',
+      disabled: function (d, hh) { return Engine.isClosed(DB, d, hh); },
+      isOn: function (d, hh) { return z.slots.indexOf(d + '-' + hh) >= 0; },
+      toggle: function (d, hh) { var k = d + '-' + hh, i = z.slots.indexOf(k); if (i >= 0) z.slots.splice(i, 1); else z.slots.push(k); commit(); },
+      mark: function (d, hh, b) { var k = d + '-' + hh; if (confKeys[k]) { b.style.boxShadow = 'inset 0 0 0 3px #B3261E'; b.title = 'Κώλυμα: ' + confKeys[k].join(', '); } } });
+    var inOther = {}; Engine.zoneList(DB).forEach(function (o) { if (o !== z) (o.classIds || []).forEach(function (id) { inOther[id] = o.name; }); });
+    var chip = function (x) {
+      var on = z.classIds.indexOf(x.id) >= 0;
+      return h('button', { class: 'cch ' + family(x) + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false', title: inOther[x.id] ? 'Είναι ήδη στη ζώνη «' + inOther[x.id] + '»' : null,
+        onclick: function () {
+          if (on) z.classIds.splice(z.classIds.indexOf(x.id), 1);
+          else { Engine.zoneList(DB).forEach(function (o) { if (o !== z) o.classIds = (o.classIds || []).filter(function (q) { return q !== x.id; }); }); z.classIds.push(x.id); }
+          commit();
+        } }, x.name + (inOther[x.id] && !on ? ' ·' : ''));
+    };
+    var mixed = DB.classes.filter(isMixed).sort(sortNatural);
     var ok = !chk.errors.length && chk.total > 0 && !conf.length;
-    return h('div', { class: 'card', style: 'padding:16px 18px;gap:12px;background:#FBFAF5' },
-      h('div', { class: 'lr', style: 'min-height:0' }, h('div', null, h('div', { style: 'font-weight:600' }, 'Ζώνες κατεύθυνσης Γ΄ Λυκείου'),
-        h('div', { class: 'sub' }, 'Κοινές για όλα τα μαθήματα κατεύθυνσης της Γ΄. Μόνο έως την 5η ώρα, συνεχόμενες κάθε μέρα. Κλικ σε ώρα για να μπει/βγει.')),
+    return h('div', { class: 'card', style: 'padding:16px 18px;gap:12px' },
+      h('label', { class: 'f' }, h('span', null, 'Όνομα ζώνης'), nameInp),
+      h('div', { class: 'lr', style: 'min-height:0' }, h('div', null, h('div', { style: 'font-weight:600' }, 'Ώρες της ζώνης'),
+        h('div', { class: 'sub' }, 'Κλικ σε ώρα για να μπει/βγει. Μπορείς να τις ορίσεις και αργότερα.')),
         h('div', { style: 'font-family:var(--serif);font-size:24px;white-space:nowrap;color:' + (ok ? 'var(--acc)' : 'var(--gap)') }, chk.total + (chk.hours ? ' / ' + chk.hours : '') + ' ώρ.')),
       g,
-      DB.classes.some(function (x) { return x.category === 'dirG'; }) ? null : h('div', { class: 'warn' }, 'Δεν υπάρχει ακόμα μικτό τμήμα με «Κατεύθυνση Γ΄ Λυκείου». Οι ζώνες θα ισχύσουν μόλις το ορίσεις.'),
-      h('div', { class: 'sub' }, 'Ανά μέρα: ' + DAYS.slice(0, D).map(function (dn, i) { return dn.slice(0, 3) + ' ' + chk.perDay[i]; }).join(' · ')),
+      chk.total ? h('div', { class: 'sub' }, 'Ανά μέρα: ' + DAYS.slice(0, DB.settings.days).map(function (dn, i) { return dn.slice(0, 3) + ' ' + chk.perDay[i]; }).join(' · ')) : null,
+      h('div', { class: 'f' }, h('span', null, 'Μαθήματα ζώνης'),
+        mixed.length ? h('div', { class: 'chk' }, mixed.map(chip)) : h('div', { class: 'warn' }, 'Φτιάξε πρώτα τα μικτά τμήματα (π.χ. ΓΘετ, ΓΑνθ).'),
+        h('div', { class: 'sub', style: 'line-height:1.5' }, 'Τα μαθήματα της ζώνης γίνονται ταυτόχρονα (κάθε μαθητής σε ένα από αυτά) και μόνο μέσα στις ώρες της. Μέσα στη ζώνη δεν μπαίνει κανένα άλλο μάθημα των ίδιων τμημάτων (της ίδιας τάξης) — π.χ. γενική παιδεία.')),
       conf.length ? h('div', { class: 'warns' }, conf.map(function (x) { return h('div', { class: 'warn error' }, x.text); })) : null,
-      chk.errors.length ? h('div', { class: 'warns' }, chk.errors.map(function (e) { return h('div', { class: 'warn error' }, e); }))
-        : conf.length ? null
-        : chk.total ? h('div', { class: 'warn info' }, 'Οι ζώνες είναι σωστές. Η αυτόματη συμπλήρωση θα βάλει όλα τα μαθήματα κατεύθυνσης Γ΄ μόνο μέσα σε αυτές.')
-        : h('div', { class: 'sub' }, 'Χωρίς ζώνες, τα μαθήματα κατεύθυνσης μπαίνουν όπου βρει θέση ο αλγόριθμος.'),
-      z.length ? h('div', null, h('button', { class: 'qk', onclick: function () { DB.settings.zonesG = []; commit(); } }, 'Καθαρισμός ζωνών')) : null);
+      chk.errors.length ? h('div', { class: 'warns' }, chk.errors.map(function (e) { return h('div', { class: 'warn error' }, e); })) : null,
+      chk.warns.length ? h('div', { class: 'warns' }, chk.warns.map(function (e) { return h('div', { class: 'warn' }, e); })) : null,
+      !chk.errors.length && !conf.length && chk.total && z.classIds.length ? h('div', { class: 'warn info' }, 'Η ζώνη είναι σωστή. Η αυτόματη συμπλήρωση θα βάλει τα μαθήματά της μόνο μέσα σε αυτήν.') : null,
+      z.slots.length ? h('div', null, h('button', { class: 'qk', onclick: function () { z.slots = []; commit(); } }, 'Καθαρισμός ωρών')) : null);
+  }
+  function newZoneDialog() {
+    var m, inp = h('input', { class: 'inp', placeholder: 'π.χ. Κατεύθυνση Γ΄' });
+    var make = function (now) {
+      var n = inp.value.trim(); if (!n) { toast('Γράψε όνομα ζώνης.', true); inp.focus(); return; }
+      if (Engine.zoneList(DB).some(function (z) { return fold(z.name) === fold(n); })) { toast('Υπάρχει ήδη ζώνη «' + n + '».', true); return; }
+      var z = { id: uid('z'), name: n, slots: [], classIds: [] };
+      DB.settings.zones = Engine.zoneList(DB).concat([z]);
+      m.close(); ui.page = 'classes'; ui.classDraft = null; if (now) ui.classId = '__zone:' + z.id; commit();
+      toast(now ? 'Κλικ στις ώρες της ζώνης και διάλεξε τα μαθήματά της.' : 'Η ζώνη «' + n + '» δημιουργήθηκε. Τις ώρες της τις ορίζεις όποτε θέλεις.');
+    };
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') make(true); });
+    m = modal([h('header', null, h('h2', null, 'Νέα ζώνη')),
+      h('div', { class: 'body' }, h('label', { class: 'f' }, h('span', null, 'Όνομα ζώνης'), inp),
+        h('div', { class: 'sub', style: 'line-height:1.5' }, 'Ζώνη = ώρες της εβδομάδας όπου γίνονται μόνο ορισμένα μαθήματα (π.χ. τα μαθήματα κατεύθυνσης της Γ΄). Μέσα στη ζώνη δεν μπαίνει άλλο μάθημα της ίδιας τάξης.')),
+      h('footer', null, h('button', { class: 'btn', onclick: function () { m.close(); } }, 'Ακύρωση'),
+        h('div', { class: 'row' }, h('button', { class: 'btn', onclick: function () { make(false); } }, 'Ώρες αργότερα'), h('button', { class: 'btn pri', onclick: function () { make(true); } }, 'Ορισμός ωρών τώρα')))], true);
+    setTimeout(function () { inp.focus(); }, 30);
+  }
+  function deleteZone(z) {
+    ask('Διαγραφή ζώνης', 'Θα διαγραφεί η ζώνη «' + (z.name || '') + '». Τα μαθήματά της θα μπαίνουν όπου βρει θέση ο αλγόριθμος.', [{ t: 'Διαγραφή', v: 'y', dng: true }]).then(function (v) {
+      if (v !== 'y') return;
+      DB.settings.zones = Engine.zoneList(DB).filter(function (x) { return x !== z; });
+      var P = pal(); delete P['z:' + z.id];
+      ui.classId = null; commit();
+    });
+  }
+  // «Μαθήματα που γίνονται ταυτόχρονα»: τμήματα που κάνουν μάθημα την ίδια ώρα (ξένες γλώσσες, Κόντρα κ.λπ.)
+  function groupDialog(g) {
+    var isNew = !g, d = { name: g ? g.name || '' : '', ids: g ? (g.classIds || []).slice() : [], maxHour: g ? +g.maxHour || 0 : 0, printRows: !!(g && g.printRows) }, m;
+    var body = h('div', { class: 'body' });
+    var nameInp = h('input', { class: 'inp', value: d.name, placeholder: 'π.χ. Ξένες γλώσσες Α΄, Κόντρα' });
+    nameInp.addEventListener('input', function () { d.name = nameInp.value; });
+    var others = {}; Engine.groupList(DB).forEach(function (o) { if (o !== g) (o.classIds || []).forEach(function (id) { (others[id] = others[id] || []).push(o.name); }); });
+    function draw() {
+      body.innerHTML = '';
+      var chip = function (x) {
+        var on = d.ids.indexOf(x.id) >= 0;
+        return h('button', { class: 'cch ' + family(x) + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false', title: others[x.id] ? 'Και στο: ' + others[x.id].join(', ') : null,
+          onclick: function () { if (on) d.ids.splice(d.ids.indexOf(x.id), 1); else d.ids.push(x.id); draw(); } }, x.name);
+      };
+      var plain = DB.classes.filter(function (x) { return !isMixed(x); }).sort(sortNatural), mixed = DB.classes.filter(isMixed).sort(sortNatural);
+      var hrs = d.ids.map(function (id) { var x = cls(id); return { n: x ? x.name : '?', h: secHours(id) }; });
+      var uneq = hrs.length > 1 && hrs.some(function (x) { return x.h !== hrs[0].h; });
+      var mh = h('select', { class: 'inp', style: 'width:auto', 'aria-label': 'Μόνο έως ώρα', onchange: function () { d.maxHour = +mh.value; } });
+      [0].concat(Array.apply(null, Array(Math.max(0, DB.settings.hours - 1))).map(function (_, i) { return i + 1; })).forEach(function (n) { var o = h('option', { value: n }, n ? 'μόνο έως την ' + n + 'η ώρα' : 'οποιαδήποτε ώρα'); if (n === d.maxHour) o.selected = true; mh.appendChild(o); });
+      add(body, [
+        h('label', { class: 'f' }, h('span', null, 'Όνομα (το γράφεις εσύ)'), nameInp),
+        h('div', { class: 'f' }, h('span', null, 'Τμήματα που κάνουν μάθημα την ίδια ώρα'),
+          mixed.length ? h('div', { class: 'sub' }, 'Μικτά τμήματα') : null, mixed.length ? h('div', { class: 'chk' }, mixed.map(chip)) : null,
+          plain.length ? h('div', { class: 'sub' }, 'Κανονικά τμήματα') : null, plain.length ? h('div', { class: 'chk' }, plain.map(chip)) : null),
+        h('label', { class: 'f' }, h('span', null, 'Πότε'), mh),
+        (function () { var sw = h('button', { class: 'sw2' + (d.printRows ? ' on' : ''), role: 'switch', 'aria-checked': d.printRows ? 'true' : 'false', 'aria-label': 'Χωριστές γραμμές στην εκτύπωση', onclick: function () { d.printRows = !d.printRows; draw(); } });
+          return h('div', { class: 'lr' }, h('div', null, h('div', null, 'Χωριστές γραμμές στην εκτύπωση'), h('div', { class: 'sub' }, 'Στη σελίδα τμημάτων κάθε μικτό τμήμα της ομάδας παίρνει δική του γραμμή (π.χ. κατευθύνσεις).')), sw); })(),
+        d.ids.length === 1 ? h('div', { class: 'warn' }, 'Με ένα μόνο τμήμα η ομάδα δεν έχει ακόμα αποτέλεσμα — πρόσθεσε τα υπόλοιπα όταν τα φτιάξεις.') : null,
+        hrs.length > 1 ? h('div', { class: 'warn ' + (uneq ? 'error' : 'info') }, hrs.map(function (x) { return x.n + ' ' + x.h + ' ώρ.'; }).join(' · ') + (uneq ? ' — για να γίνονται μαζί πρέπει να έχουν τις ίδιες ώρες.' : '')) : null,
+        h('div', { class: 'warn info', style: 'line-height:1.55' },
+          h('b', null, 'Οδηγία: '), 'Τα τμήματα μιας ομάδας κάνουν μάθημα πάντα την ίδια ώρα (π.χ. ΑΓαλ και ΑΓερμ). ',
+          'Αν ένα τμήμα χωρίζεται στη μέση και τα δύο μισά κάνουν διαφορετικό μάθημα, δήλωσε τα μισά ως χωριστά μικτά τμήματα με διαφορετικό όνομα (π.χ. Β1α και Β1β, χρεωμένα στο Β1) και βάλε τα εδώ μαζί.')]);
+      setTimeout(function () { nameInp.focus(); }, 0);
+    }
+    function save() {
+      var n = (d.name || '').trim();
+      if (!n) { toast('Γράψε όνομα (π.χ. «Ξένες γλώσσες Α΄»).', true); return; }
+      if (d.ids.length < 1) { toast('Διάλεξε τα τμήματα.', true); return; }
+      if (Engine.groupList(DB).some(function (o) { return o !== g && fold(o.name) === fold(n); })) { toast('Υπάρχει ήδη ομάδα «' + n + '».', true); return; }
+      if (!g) { g = { id: uid('g') }; DB.syncGroups = Engine.groupList(DB).concat([g]); }
+      g.name = n; g.classIds = d.ids.slice(); g.maxHour = d.maxHour || 0; g.printRows = !!d.printRows;
+      m.close(); commit(); toast('Αποθηκεύτηκε: «' + n + '».');
+    }
+    function del() {
+      ask('Διαγραφή', 'Θα διαγραφεί η ομάδα «' + (g.name || '') + '». Τα τμήματα δεν διαγράφονται — απλώς δεν θα γίνονται υποχρεωτικά την ίδια ώρα.', [{ t: 'Διαγραφή', v: 'y', dng: true }]).then(function (v) {
+        if (v !== 'y') return; DB.syncGroups = Engine.groupList(DB).filter(function (x) { return x !== g; }); var P = pal(); delete P['g:' + g.id]; m.close(); commit();
+      });
+    }
+    m = modal([h('header', null, h('h2', null, isNew ? 'Μαθήματα που γίνονται ταυτόχρονα' : (g.name || 'Ταυτόχρονα'))), body,
+      h('footer', null, isNew ? h('span') : h('button', { class: 'btn dng', onclick: del }, icon('trash', 16), 'Διαγραφή'),
+        h('div', { class: 'row' }, h('button', { class: 'btn', onclick: function () { m.close(); } }, 'Ακύρωση'), h('button', { class: 'btn pri', onclick: save }, 'Αποθήκευση')))], true);
+    draw();
+  }
+  function dropClassRefs(id) {   // ένα τμήμα που διαγράφεται φεύγει και από ομάδες «ταυτόχρονα» και ζώνες
+    Engine.groupList(DB).forEach(function (g) { g.classIds = (g.classIds || []).filter(function (q) { return q !== id; }); });
+    Engine.zoneList(DB).forEach(function (z) { z.classIds = (z.classIds || []).filter(function (q) { return q !== id; }); });
   }
   function dependsOn(x, id, seen) {   // το x χρεώνεται (άμεσα ή έμμεσα) στο id;
     seen = seen || {}; if (seen[x.id]) return false; seen[x.id] = 1;
@@ -2979,7 +3245,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
   function newClass(kind) {
     guardClassDraft(function () {
       ui.page = 'classes'; ui.classId = '__new';
-      ui.classDraft = { id: uid('c'), name: '', kind: kind, members: [], syncWith: [], category: '', isNew: true };
+      ui.classDraft = { id: uid('c'), name: '', kind: kind, members: [], isNew: true };
       render();
     });
   }
@@ -3005,10 +3271,10 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
       var dels = rows.filter(function (r) { return r.id && (r.del || !r.name.trim()); });
       var go = function () {
         if (dels.length) backup('πριν-τις-ονομασίες');
-        keep.forEach(function (r) { if (r.id) cls(r.id).name = r.name.trim(); else DB.classes.push({ id: uid('c'), name: r.name.trim(), kind: 'class', members: [], syncWith: [] }); });
+        keep.forEach(function (r) { if (r.id) cls(r.id).name = r.name.trim(); else DB.classes.push({ id: uid('c'), name: r.name.trim(), kind: 'class', members: [] }); });
         dels.forEach(function (r) {
           var c = cls(r.id); if (!c) return; DB.classes.splice(DB.classes.indexOf(c), 1);
-          DB.classes.forEach(function (x) { x.members = x.members.filter(function (q) { return q !== r.id; }); x.syncWith = (x.syncWith || []).filter(function (q) { return q !== r.id; }); });
+          DB.classes.forEach(function (x) { x.members = x.members.filter(function (q) { return q !== r.id; }); }); dropClassRefs(r.id);
           DB.assignments.forEach(function (a) { a.classIds = a.classIds.filter(function (q) { return q !== r.id; }); });
         });
         m.close(); ui.page = 'classes'; ui.classId = null; commit(); toast('Οι ονομασίες αποθηκεύτηκαν.');
@@ -3028,7 +3294,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
       h('footer', null, h('span'), h('div', { class: 'row' }, h('button', { class: 'btn', onclick: function () { m.close(); } }, 'Ακύρωση'),
         h('button', { class: 'btn pri', onclick: function () {
           var made = 0;
-          ['Α', 'Β', 'Γ'].forEach(function (g) { for (var i = 1; i <= vals[g]; i++) { var n = g + i; if (!DB.classes.some(function (x) { return x.name === n; })) { DB.classes.push({ id: uid('c'), name: n, kind: 'class', members: [], syncWith: [] }); made++; } } });
+          ['Α', 'Β', 'Γ'].forEach(function (g) { for (var i = 1; i <= vals[g]; i++) { var n = g + i; if (!DB.classes.some(function (x) { return x.name === n; })) { DB.classes.push({ id: uid('c'), name: n, kind: 'class', members: [] }); made++; } } });
           m.close(); ui.page = 'classes'; commit(); toast('Δημιουργήθηκαν ' + made + ' τμήματα.');
         } }, 'Δημιουργία')))], true);
   }
@@ -3037,7 +3303,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
       if (v !== 'y') return;
       backup('πριν-τη-διαγραφή-τμήματος');
       DB.classes.splice(DB.classes.indexOf(c), 1);
-      DB.classes.forEach(function (x) { x.members = x.members.filter(function (m) { return m !== c.id; }); x.syncWith = (x.syncWith || []).filter(function (m) { return m !== c.id; }); });
+      DB.classes.forEach(function (x) { x.members = x.members.filter(function (m) { return m !== c.id; }); }); dropClassRefs(c.id);
       DB.assignments.forEach(function (a) { a.classIds = a.classIds.filter(function (id) { return id !== c.id; }); });
       ui.classId = null; ui.classDraft = null; commit();
     });
@@ -3233,9 +3499,8 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
         h('section', { class: 'card' }, h('div', { class: 'row', style: 'justify-content:space-between' }, h('h2', null, 'Σχολείο'),
             h('button', { class: 'btn sm', onclick: function () { guardDrafts(function () { newSchoolDialog(false); }); } }, icon('plus', 14), 'Εισαγωγή σχολείου')),
           field('Όνομα σχολείου (κεφαλίδα εκτύπωσης)', DB.school, 'name', 'π.χ. 1ο ΓΕΝΙΚΟ ΛΥΚΕΙΟ …'),
-          h('div', { class: 'f' }, h('span', null, 'Είδος σχολείου'), h('div', { class: 'seg', role: 'radiogroup', 'aria-label': 'Είδος σχολείου' },
-            [['lyceum', 'Λύκειο'], ['gym', 'Γυμνάσιο'], ['other', 'Άλλο']].map(function (x) { var on = (DB.school.type || 'lyceum') === x[0];
-              return h('button', { class: on ? 'on' : '', role: 'radio', 'aria-checked': on ? 'true' : 'false', onclick: function () { DB.school.type = x[0]; commit(); } }, x[1]); }))),
+          h('div', { class: 'lr' }, h('div', null, h('div', null, 'Ώρες λειτουργίας'), h('div', { class: 'sub' }, opSummary(DB.settings))),
+            h('button', { class: 'btn sm', onclick: opHoursDialog }, 'Αλλαγή')),
           field('Τίτλος εκτύπωσης', DB.school, 'title', 'Συνολικό ωρολόγιο Εκπαιδευτικών'),
           h('div', { class: 'g2' }, field('Σχολικό έτος', DB.school, 'year', 'π.χ. 2026–27'), field('Ισχύει από', DB.school, 'validFrom', 'π.χ. 2/11/2026'))),
         h('section', { class: 'card' }, h('h2', null, 'Μαθητές'),
@@ -3304,7 +3569,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
           h('div', null, '   (ή στο εικονίδιο «Ωρολόγιο» της επιφάνειας εργασίας, αν υπάρχει).'))));
       return;
     }
-    if (SCH.list.length) { if (!curSchool()) SCH.cur = SCH.list[0].id; DB = migrate(localData(SCH.cur) || emptyData()); }
+    if (SCH.list.length) { if (!curSchool()) SCH.cur = SCH.list[0].id; DB = migrate(localData(SCH.cur) || emptyData()); schoolLoaded = true; }
     if (!window.showDirectoryPicker) { store.unsupported = true; render(); if (!SCH.list.length) newSchoolDialog(true); return; }
     render();
     idb('get').then(function (dir) {

@@ -70,77 +70,103 @@ def base_classes(data, cid, seen=None):
 
 
 merge_of = {}
+ZINFO = {}
+
+
+def closed_set(data):
+    return set((data.get('settings') or {}).get('closed') or [])
 
 
 def sync_sets(data):
-    """Μικτά τμήματα που γίνονται ταυτόχρονα (ίδια λογική με engine.js)."""
+    """Ομάδες ταυτόχρονων + ζώνες (ίδια λογική με engine.js):
+    ίδια ομάδα ταυτόχρονων → την ίδια ώρα· ίδια ζώνη → εναλλακτικές μόνο μέσα στη ζώνη·
+    μικτό που χρεώνεται σε ≥2 μικτά της ίδιας ομάδας/ζώνης → κοινό τους τμήμα."""
+    global merge_of, ZINFO
     cby = {c['id']: c for c in data['classes']}
-    par = {c['id']: c['id'] for c in data['classes'] if is_mixed(c)}
 
-    def find(x):
-        while par[x] != x:
-            par[x] = par[par[x]]
-            x = par[x]
-        return x
-
-    def uni(a, b):
-        if a in par and b in par:
-            a, b = find(a), find(b)
-            if a != b:
-                par[b] = a
-    by_tag = {}
-    for c in data['classes']:
-        if not is_mixed(c):
-            continue
-        for o in c.get('syncWith') or []:
-            uni(c['id'], o)
-        k = (c.get('parallel') or '').strip()
-        if k:
-            if k in by_tag:
-                uni(by_tag[k], c['id'])
-            else:
-                by_tag[k] = c['id']
-    # ίδια κατηγορία + κοινό τμήμα χρέωσης → ταυτόχρονα
     def is_dep(c):
         return any(is_mixed(cby.get(mb)) for mb in c.get('members') or [])
-    mixed = [c for c in data['classes'] if is_mixed(c) and c.get('category')]
-    for i, x in enumerate(mixed):
-        for y in mixed[i + 1:]:
-            if is_dep(x) != is_dep(y):
-                continue  # συγχωνευμένο (π.χ. ΓΘετΥγ) ή Κόντρα: όχι μαζί με τα κανονικά
-            if is_dep(x) and is_dep(y) and x['category'] != 'kontra':
-                continue  # συγχωνευμένα: το καθένα μόνο του
-            if x['category'] == y['category'] and set(base_classes(data, x['id'])) & set(base_classes(data, y['id'])):
-                uni(x['id'], y['id'])
-    groups = {}
-    for cid in par:
-        groups.setdefault(find(cid), []).append(cid)
-    sets, tag, set_of, merges = [], {}, {}, []
-    global merge_of
+    sets, tag, set_of, merges, zone_of, max_hour_of = [], {}, {}, [], {}, {}
     merge_of = {}
-    for r, ids in groups.items():
+    for g in data.get('syncGroups') or []:
+        ids = [i for i in g.get('classIds') or [] if i in cby]
+        for i in ids:
+            if int(g.get('maxHour') or 0) > 0:
+                max_hour_of[i] = int(g.get('maxHour'))
         if len(ids) < 2:
-            if is_dep(cby[ids[0]]):
-                tag[ids[0]] = 'D:' + ids[0]  # μοναχικό εξαρτημένο: δική του ετικέτα
             continue
-        for cid in ids:
-            tag[cid] = 'S:' + r
-            set_of[cid] = len(sets)
+        ids.sort(key=lambda i: cby[i].get('name', ''))
+        si = len(sets)
         sets.append(ids)
         merges.append([])
-    # συγχωνευμένα: μικτό ίδιας κατηγορίας που χρεώνεται σε ≥2 τμήματα του ίδιου σετ (π.χ. ΓΘετΥγ → Γθετ, Γυγ)
+        for i in ids:
+            set_of[i] = si
+            if is_mixed(cby[i]):
+                tag[i] = 'S:' + g['id']
+    zones = list((data.get('settings') or {}).get('zones') or [])
+    for z in zones:
+        own = []
+        for i in z.get('classIds') or []:
+            if i not in cby:
+                continue
+            zone_of[i] = z
+            if is_mixed(cby[i]) and i not in tag and not is_dep(cby[i]):
+                tag[i] = 'Z:' + z['id']
+                own.append(i)
+        if len(own) >= 2:   # τα μαθήματα της ζώνης γίνονται ταυτόχρονα
+            own.sort(key=lambda i: cby[i].get('name', ''))
+            si = len(sets)
+            sets.append(own)
+            merges.append([])
+            for i in own:
+                set_of[i] = si
     for c in data['classes']:
         if not is_mixed(c) or not is_dep(c) or c['id'] in set_of:
             continue
-        ms = c.get('members') or []
-        si = set_of.get(ms[0]) if ms else None
-        if len(ms) < 2 or si is None:
-            continue
-        if all(set_of.get(mb) == si and cby[mb].get('category') == c.get('category') for mb in ms):
-            merges[si].append(c['id'])
-            tag[c['id']] = tag[ms[0]]  # ίδιο «κανάλι» μαθητών με το σετ
+        ms = [m for m in c.get('members') or [] if m in cby]
+        t0 = tag.get(ms[0]) if ms else None
+        if len(ms) >= 2 and t0 and all(tag.get(m) == t0 for m in ms):
+            tag[c['id']] = t0
             merge_of[c['id']] = list(ms)
+            si = set_of.get(ms[0])
+            if si is not None and all(set_of.get(m) == si for m in ms):
+                merges[si].append(c['id'])
+                set_of[c['id']] = si
+            if c['id'] not in zone_of and ms[0] in zone_of:
+                zone_of[c['id']] = zone_of[ms[0]]
+            continue
+        tag.setdefault(c['id'], 'D:' + c['id'])
+    zone_bases = {}
+    for z in zones:
+        o = set()
+        for i in z.get('classIds') or []:
+            if i in cby:
+                o.update(base_classes(data, i))
+        zone_bases[z['id']] = o
+    ZINFO = {'zone_of': zone_of, 'max_hour_of': max_hour_of, 'zones': zones, 'zone_bases': zone_bases, 'closed': closed_set(data)}
     return sets, tag, merges
+
+
+def slot_allowed(data, cid, d, h):
+    """Κλειστή ώρα, ζώνη, «μόνο έως Νη ώρα», αποκλειστικότητα ζωνών (ίδια τάξη έξω από τη ζώνη)."""
+    k = f'{d}-{h}'
+    if k in ZINFO['closed']:
+        return False
+    mh = ZINFO['max_hour_of'].get(cid)
+    if mh and h + 1 > mh:
+        return False
+    z = ZINFO['zone_of'].get(cid)
+    if z:
+        sl = z.get('slots') or []
+        return not sl or k in sl
+    bs = None
+    for zz in ZINFO['zones']:
+        if k not in (zz.get('slots') or []):
+            continue
+        bs = bs if bs is not None else set(base_classes(data, cid))
+        if bs & ZINFO['zone_bases'][zz['id']]:
+            return False
+    return True
 
 
 def label_of(data, a):
@@ -154,14 +180,6 @@ def build(data):
     tidx = {t['id']: i for i, t in enumerate(teachers)}
     cby = {c['id']: c for c in data['classes']}
     sets, stag, smerges = sync_sets(data)
-    zones = set((data.get('settings') or {}).get('zonesG') or [])
-    if (data.get('school') or {}).get('type', 'lyceum') != 'lyceum':
-        zones = set()   # ζώνες κατεύθυνσης υπάρχουν μόνο στο Λύκειο
-    zone_bases = set()   # τμήματα (Γ1, Γ2…) που έχουν κατεύθυνση Γ΄
-    for c in data['classes']:
-        if c.get('category') == 'dirG' and is_mixed(c):
-            zone_bases.update(base_classes(data, c['id']))
-
     def touches(class_ids):
         res = {}
         for cid in class_ids:
@@ -195,13 +213,7 @@ def build(data):
                 k = f'{d}-{h}'
                 fr, to = int(a.get('fromHour') or 0), int(a.get('toHour') or 0)
                 in_range = (fr <= 0 or h + 1 >= fr) and (to <= 0 or h + 1 <= to)
-                c0 = cby.get(cls[0]) or {}
-                if c0.get('category') == 'dirG' and is_mixed(c0) and zones:
-                    in_range = in_range and k in zones
-                if c0.get('category') == 'dirB' and is_mixed(c0):
-                    in_range = in_range and h < 5  # κατεύθυνση Β΄: ποτέ 6η και 7η ώρα
-                if zones and k in zones and not (c0.get('category') == 'dirG' and is_mixed(c0)) and zone_bases & set(base_classes(data, cls[0])):
-                    in_range = False   # γενική παιδεία / Κόντρα της Γ΄: ποτέ μέσα στη ζώνη
+                in_range = in_range and slot_allowed(data, cls[0], d, h)
                 allowed.append(av.get(k) != 'no' and sl.get(k) != 'never' and in_range)
                 pref.append(av.get(k) == 'pref')
                 if sl.get(k) == 'must':
@@ -259,8 +271,9 @@ def build(data):
         a['sp'] = sorted(st)
         for pi in a['sp']:
             sps[pi]['N'] += a['hours']
+    open_days = max(1, sum(1 for d in range(D) if any(f'{d}-{h}' not in ZINFO['closed'] for h in range(H))))
     for sp in sps:
-        sp['lo'], sp['hi'] = sp['N'] // D, -(-sp['N'] // D)
+        sp['lo'], sp['hi'] = sp['N'] // open_days, -(-sp['N'] // open_days)
     def hrs(i):
         return sum(a['hours'] for a in asg if a['sec'] == i)
     syncs = []
@@ -444,9 +457,11 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
             for d in range(D):
                 b = []
                 for h in range(H):
+                    if f'{d}-{h}' in ZINFO['closed']:
+                        continue   # κλειστή ώρα σχολείου: δεν μετράει
                     s_ = d * H + h
                     b.append(sum(occ(a['ai'], s_) for a in mine if occ_ok(a['ai'], s_)))
-                for h in range(H - 1):
+                for h in range(len(b) - 1):
                     if isinstance(b[h], int) and isinstance(b[h + 1], int):
                         if b[h] < b[h + 1]:
                             return {'ok': False, 'message': 'Οι κλειδωμένες ώρες αφήνουν κενό στους μαθητές ' + sp['name'] + '.'}
@@ -466,7 +481,7 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
     target, target_lo, work_day = [], [], []
     for ti, t in enumerate(teachers):
         need = sum(a['hours'] for a in asg if a['t'] == ti)
-        wd = [any((t.get('avail') or {}).get(f'{d}-{h}') != 'no' for h in range(H)) for d in range(D)]
+        wd = [any((t.get('avail') or {}).get(f'{d}-{h}') != 'no' and f'{d}-{h}' not in ZINFO['closed'] for h in range(H)) for d in range(D)]
         days = max(1, sum(wd))
         target.append(-(-need // days) if need else 0)   # π.χ. 18 ώρες σε 5 μέρες → 3–4 ώρες τη μέρα
         target_lo.append(need // days if need else 0)
@@ -531,8 +546,8 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
                 l[h] = lv
             day_gaps = []
             for h in range(1, H - 1):
-                if av.get(f'{d}-{h}') == 'no':
-                    continue   # ώρα με κώλυμα: δεν μετράει ως κενό
+                if av.get(f'{d}-{h}') == 'no' or f'{d}-{h}' in ZINFO['closed']:
+                    continue   # ώρα με κώλυμα ή κλειστή ώρα: δεν μετράει ως κενό
                 gv = m.NewBoolVar('')
                 m.Add(gv >= f[h - 1] + l[h + 1] - 1 - w[h])
                 m.Add(gv <= 1 - w[h])

@@ -11,7 +11,7 @@ import threading
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 HTML = os.path.join(APP_DIR, 'Ωρολόγιο.html')
-VERSION = '2.0'
+VERSION = '2.1'
 NEEDED = ['PySide6', 'ortools']
 
 
@@ -143,6 +143,32 @@ def run_app():
     registry = os.path.join(data_dir, 'σχολεία.json')   # λίστα σχολείων + ποιο είναι ανοιχτό
     os.makedirs(schools_root, exist_ok=True)
     CUR = {'id': None}
+
+    def adopt_legacy():
+        # Παλιές εκδόσεις (ένα σχολείο): Έγγραφα\Ωρολόγιο\data.json → γίνεται το πρώτο σχολείο της λίστας.
+        # Τα παλιά αρχεία ΔΕΝ σβήνονται· αντιγράφονται στον φάκελο του σχολείου.
+        old = os.path.join(data_dir, 'data.json')
+        if os.path.exists(registry) or not os.path.exists(old):
+            return
+        try:
+            import shutil
+            with open(old, encoding='utf-8') as f:
+                d = json.load(f)
+            name = ((d.get('school') or {}).get('name') or '').strip() or 'Σχολείο'
+            sid = 's_old'
+            dst = os.path.join(schools_root, sid)
+            os.makedirs(dst, exist_ok=True)
+            shutil.copy2(old, os.path.join(dst, 'data.json'))
+            for sub in ('αντίγραφα', 'εκτυπώσεις'):
+                src = os.path.join(data_dir, sub)
+                if os.path.isdir(src) and not os.path.exists(os.path.join(dst, sub)):
+                    shutil.copytree(src, os.path.join(dst, sub))
+            with open(registry, 'w', encoding='utf-8') as f:
+                json.dump({'list': [{'id': sid, 'name': name}], 'cur': sid}, f, ensure_ascii=False, indent=1)
+        except Exception:
+            pass
+
+    adopt_legacy()
 
     def school_dir(sid=None):
         d = os.path.join(schools_root, sid or CUR['id'] or '_')
