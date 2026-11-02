@@ -1,0 +1,116 @@
+ΩΡΟΛΟΓΙΟ (HORARIO) — versión 2.2
+================================
+Horario semanal del profesorado, con rellenado automático.
+
+
+1. INSTALACIÓN
+--------------
+• Descomprime la carpeta en un lugar permanente (p. ej. en Documentos).
+• Haz doble clic en «Start.cmd» (es lo mismo que «Εκκίνηση.cmd»).
+  – Si falta Python, te pregunta si quieres instalarlo. Python es OBLIGATORIO.
+    Se instala desde python.org solo para el usuario actual (unos 25 MB,
+    requiere internet, sin contraseña de administrador).
+  – La primera vez, la aplicación instala sola las bibliotecas PySide6 y
+    OR-Tools (2–5 minutos) y crea un icono «Ωρολόγιο» en el escritorio.
+• Los archivos Ωρολόγιο.pyw, Ωρολόγιο.html y orologio_cpsat.py deben estar
+  juntos. Conservan sus nombres en griego; es normal.
+• Idioma: en el primer inicio eliges Ελληνικά, English, Français, Deutsch o
+  Español. Se cambia cuando quieras en Ajustes y archivo → «Idioma».
+
+
+2. CENTROS
+----------
+• En el primer inicio escribes tu centro (nombre, curso escolar) y su HORARIO:
+  una cuadrícula lunes–sábado × 1.ª–10.ª hora; haz clic en las horas en que abre
+  el centro (p. ej. viernes solo hasta la 6.ª hora). Se cambia en
+  Ajustes y archivo → Centro → Horario del centro → «Cambiar».
+• A la izquierda, encima del menú, está la lista «Centros».
+  – Clic en un centro para abrirlo.
+  – «+ Añadir centro» (cuando quieras): un centro nuevo vacío, o «Desde archivo
+    de copia…» para traer un centro desde un archivo .json (Ajustes y archivo →
+    Exportar copia, en otro ordenador).
+• Cada centro tiene sus propios docentes, grupos, asignaciones, zonas, horario,
+  copias de seguridad e impresiones.
+• Eliminar un centro: Ajustes y archivo → «Eliminar centro». Antes se guarda una
+  copia y su carpeta pasa a «διαγραμμένα σχολεία» (centros eliminados).
+
+Dónde se guardan los datos: Documentos\Ωρολόγιο\σχολεία\<centro>\
+   data.json       → todos los datos del centro
+   αντίγραφα\      → copias de seguridad
+   εκτυπώσεις\     → cada PDF que creas, con fecha y hora
+
+
+3. ORDEN DE TRABAJO
+-------------------
+1. Grupos
+   • «Rápido A1–C3» para los grupos normales.
+   • Grupos mixtos: materias asignadas a uno o varios grupos (p. ej. un grupo de
+     francés con alumnos de A1 y A2).
+   • «Clases simultáneas»: marca los grupos, escribe el nombre que quieras
+     (p. ej. «Idiomas A») y guarda. Siempre van a la misma hora. Opcional:
+     «solo hasta la N.ª hora» y «filas separadas en la impresión». Puedes tener
+     todos los conjuntos que quieras; clic en uno de la lista para cambiarlo.
+     ATENCIÓN: si un grupo se divide en dos y las mitades tienen clases
+     distintas, declara las mitades como grupos mixtos separados con nombres
+     distintos (p. ej. B1a y B1b, asignados a B1) y ponlos juntos en un conjunto.
+   • «Zona»: dale un nombre (p. ej. «Itinerarios de 2.º») y define sus horas
+     ahora o más tarde. En «Materias de la zona» elige sus materias. Van a la vez
+     y solo dentro de la zona; dentro de la zona no se coloca ninguna otra clase
+     del mismo curso. Puede haber más de una zona.
+2. Docentes
+   • Especialidad, horas lectivas, cargo (dirección / subdirección — para el
+     orden en la impresión).
+   • Disponibilidad: clic en una hora → Disponible → Mejor no → No disponible.
+   • Huecos y día:
+     – «Huecos por semana» = EXACTAMENTE esos en total.
+     – «Máximo de huecos por día» = nunca más en ningún día.
+       p. ej. 3 por semana + máximo 1 por día → 1 hueco en tres días, 0 en los demás.
+     – Sin número: se busca cero huecos.
+     – «Exactamente estos (obligatorio)» u «Objetivo (si es posible)».
+     – Una hora no disponible no cuenta como hueco.
+   • Máximo de horas lectivas por día (solo cuentan las horas de clase).
+3. Asignaciones (en la parte de abajo de la ficha del docente)
+   • Grupo, horas por semana, horas dobles / triples, veces por día,
+     «sin días consecutivos».
+4. Horario → «Rellenado automático»
+   • Cuanto más tiempo le des (60–300 s), mejor la solución.
+   • El reparto equilibrado y los «Huecos equitativos para todos» se ajustan en
+     Ajustes.
+
+
+4. CAMBIOS A MANO
+-----------------
+• Arrastra una casilla a otra hora (misma fila u otra): se intercambian.
+• Doble clic = bloquear (el rellenado automático no la mueve).
+• Clic derecho = opciones: bloquear, quitar, hora doble, editar asignación.
+• Las horas dobles tienen un marco. Si mueves una de las dos horas, pasan a ser
+  dos horas sueltas. Nueva hora doble: dos horas del mismo grupo juntas → clic
+  derecho → «Hora doble con la siguiente/anterior».
+• «Sin ubicar» (derecha): horas aún no colocadas; arrástralas a una hora.
+• «Problemas» (derecha, siempre visible):
+  – Ajustes que no pueden cumplirse a la vez → clic: ficha del docente
+  – En el horario → clic: se resalta la fila del docente
+  – Advertencias (p. ej. reparto de los alumnos): no son incumplimientos.
+
+
+5. IMPRESIÓN
+------------
+• Página 1: docentes (dirección, subdirección y luego por especialidad).
+• Página 2: grupos y, debajo, filas separadas para cada zona y para cada
+  conjunto «simultáneo» con «filas separadas en la impresión».
+• La aplicación crea un PDF, lo abre y lo guarda en la carpeta «εκτυπώσεις».
+
+
+6. DOCENTES DESDE UN ARCHIVO DE TEXTO (.md)
+-------------------------------------------
+Una línea por docente:
+   Apellido Nombre, MAT, A1, A1, B2B2, C-CIE
+coma = otro día · B2B2 = hora doble · A1A1A1 = hora triple.
+Los grupos deben existir ya (con el mismo nombre) en la página «Grupos».
+
+
+7. ACTUALIZACIONES
+------------------
+Sustituye solo los archivos de la aplicación. La carpeta de datos no se toca;
+la nueva versión actualiza los datos sola. Para más seguridad:
+Ajustes y archivo → «Exportar copia».

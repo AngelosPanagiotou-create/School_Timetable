@@ -289,8 +289,101 @@ def build(data):
 
 DAY_SHORT = ['Δευ', 'Τρί', 'Τετ', 'Πέμ', 'Παρ', 'Σάβ']
 
+# ---- Γλώσσα μηνυμάτων (data['_lang'] από την εφαρμογή) ----
+LANG = 'el'
+MSG = {
+ "NO_SLOT": {
+  "el": "καμία επιτρεπτή ώρα (κωλύματα / ζώνες)",
+  "en": "no allowed period (unavailability / zones)",
+  "fr": "aucune heure autorisée (indisponibilités / zones)",
+  "de": "keine erlaubte Stunde (Sperrzeiten / Zonen)",
+  "es": "ninguna hora permitida (indisponibilidad / zonas)"
+ },
+ "SYNC_HOURS": {
+  "el": "Τα ταυτόχρονα μικτά τμήματα {0} έχουν διαφορετικές ώρες ({1}).",
+  "en": "The simultaneous mixed groups {0} have different periods ({1}).",
+  "fr": "Les groupes mixtes simultanés {0} ont des heures différentes ({1}).",
+  "de": "Die gleichzeitigen Mischgruppen {0} haben unterschiedliche Stunden ({1}).",
+  "es": "Los grupos mixtos simultáneos {0} tienen horas distintas ({1})."
+ },
+ "LOCK_SYNC": {
+  "el": "Οι κλειδωμένες ώρες σπάνε το «ταυτόχρονα» των {0}.",
+  "en": "The locked periods break the “simultaneous” rule of {0}.",
+  "fr": "Les heures verrouillées cassent la règle « simultanés » de {0}.",
+  "de": "Die gesperrten Stunden verletzen „gleichzeitig“ bei {0}.",
+  "es": "Las horas bloqueadas rompen la regla «simultáneas» de {0}."
+ },
+ "LOCK_GAP": {
+  "el": "Οι κλειδωμένες ώρες αφήνουν κενό στους μαθητές {0}.",
+  "en": "The locked periods leave a gap for students {0}.",
+  "fr": "Les heures verrouillées laissent un trou aux élèves {0}.",
+  "de": "Die gesperrten Stunden lassen eine Lücke für die Schüler {0}.",
+  "es": "Las horas bloqueadas dejan un hueco a los alumnos {0}."
+ },
+ "STEP1": {
+  "el": "Βήμα 1/2: τοποθέτηση όλων των ωρών…",
+  "en": "Step 1/2: placing all periods…",
+  "fr": "Étape 1/2 : placement de toutes les heures…",
+  "de": "Schritt 1/2: alle Stunden setzen…",
+  "es": "Paso 1/2: colocando todas las horas…"
+ },
+ "STEP1B": {
+  "el": "Βήμα 1/2: δεν χωρούν όλες — όσο περισσότερες γίνεται…",
+  "en": "Step 1/2: not all fit — as many as possible…",
+  "fr": "Étape 1/2 : tout ne tient pas — le plus possible…",
+  "de": "Schritt 1/2: nicht alle passen — so viele wie möglich…",
+  "es": "Paso 1/2: no caben todas — las máximas posibles…"
+ },
+ "STEP2": {
+  "el": "Βήμα 2/2: λιγότερα κενά, καλύτερη κατανομή…",
+  "en": "Step 2/2: fewer gaps, better spread…",
+  "fr": "Étape 2/2 : moins de trous, meilleure répartition…",
+  "de": "Schritt 2/2: weniger Springstunden, bessere Verteilung…",
+  "es": "Paso 2/2: menos huecos, mejor reparto…"
+ },
+ "NO_FIT": {
+  "el": "δεν χωράει χωρίς σύγκρουση με τους αυστηρούς κανόνες",
+  "en": "does not fit without breaking the strict rules",
+  "fr": "ne tient pas sans enfreindre les règles strictes",
+  "de": "passt nicht, ohne strenge Regeln zu verletzen",
+  "es": "no cabe sin romper las reglas estrictas"
+ },
+ "UNPLACED": {
+  "el": "{0} · {1}: {2} ώρ. χωρίς θέση — {3}",
+  "en": "{0} · {1}: {2} per. unplaced — {3}",
+  "fr": "{0} · {1} : {2} h non placées — {3}",
+  "de": "{0} · {1}: {2} Std. ohne Platz — {3}",
+  "es": "{0} · {1}: {2} h sin ubicar — {3}"
+ },
+ "INFEAS": {
+  "el": "Τα δεσμευτικά κενά κάποιου εκπαιδευτικού (ή οι κλειδωμένες ώρες / οι μέγιστες ώρες την ημέρα) δεν γίνεται να τηρηθούν μαζί με τους υπόλοιπους κανόνες. Έλεγξε τα κενά που έχεις ορίσει (π.χ. κάνε τα «Στόχο») ή ξεκλείδωσε ώρες.",
+  "en": "A teacher’s binding gaps (or locked periods / maximum periods per day) cannot be met together with the other rules. Check the gaps you set (e.g. make them “Target”) or unlock periods.",
+  "fr": "Les trous obligatoires d’un enseignant (ou les heures verrouillées / le maximum d’heures par jour) ne peuvent pas être respectés avec les autres règles. Vérifie les trous définis (ex. mets-les en « Objectif ») ou déverrouille des heures.",
+  "de": "Die verbindlichen Springstunden einer Lehrkraft (oder gesperrte Stunden / Höchststunden pro Tag) lassen sich nicht mit den übrigen Regeln vereinbaren. Prüfe die festgelegten Springstunden (z. B. als „Ziel“) oder entsperre Stunden.",
+  "es": "Los huecos obligatorios de un docente (o las horas bloqueadas / el máximo de horas por día) no pueden cumplirse junto con las demás reglas. Revisa los huecos definidos (p. ej. ponlos como «Objetivo») o desbloquea horas."
+ },
+ "TIMEOUT": {
+  "el": "Δεν βρέθηκε λύση στον χρόνο που δόθηκε. Δοκίμασε περισσότερο χρόνο.",
+  "en": "No solution found in the given time. Try more time.",
+  "fr": "Aucune solution trouvée dans le temps imparti. Essaie avec plus de temps.",
+  "de": "In der vorgegebenen Zeit keine Lösung gefunden. Versuche es mit mehr Zeit.",
+  "es": "No se encontró solución en el tiempo dado. Prueba con más tiempo."
+ }
+}
+
+
+def _(key, *args):
+    m = MSG[key]
+    s = m.get(LANG) or m['el']
+    for i, a in enumerate(args):
+        s = s.replace('{' + str(i) + '}', str(a))
+    return s
+
+
 
 def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
+    global LANG
+    LANG = data.get('_lang') or 'el'
     """Όλη η εβδομάδα λύνεται μαζί (όχι μέρα-μέρα).
     Σειρά προτεραιότητας:
       1. αυστηροί κανόνες — δεν παραβιάζονται ποτέ (ποτέ δύο μαθήματα την ίδια ώρα)
@@ -345,7 +438,7 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
         for ln in lens:
             dom = [d * H + h for d in range(D) for h in range(H - ln + 1) if all(a['allowed'][d * H + h + i] for i in range(ln))]
             if not dom:
-                unplaceable.append({'aid': a['id'], 'len': ln, 'why': 'καμία επιτρεπτή ώρα (κωλύματα / ζώνες)'})
+                unplaceable.append({'aid': a['id'], 'len': ln, 'why': _('NO_SLOT')})
                 continue
             xs = {}
             for st in dom:
@@ -439,13 +532,13 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
     # ταυτόχρονα μικτά τμήματα: ίδια πληρότητα σε κάθε ώρα
     for sy in syncs:
         if len(set(sy['hours'])) > 1:
-            return {'ok': False, 'message': 'Τα ταυτόχρονα μικτά τμήματα ' + sy['name'] + ' έχουν διαφορετικές ώρες (' + ' / '.join(map(str, sy['hours'])) + ').'}
+            return {'ok': False, 'message': _('SYNC_HOURS', sy['name'], ' / '.join(map(str, sy['hours'])))}
         secs = [[a for a in asg if a['sec'] == cid or a['sec'] in sy['cover'][k]] for k, cid in enumerate(sy['secs'])]
         for s_ in range(S):
             exprs = [sum(occ(a['ai'], s_) for a in lst if occ_ok(a['ai'], s_)) for lst in secs]
             if all(isinstance(e, int) for e in exprs):
                 if len(set(exprs)) > 1:
-                    return {'ok': False, 'message': 'Οι κλειδωμένες ώρες σπάνε το «ταυτόχρονα» των ' + sy['name'] + '.'}
+                    return {'ok': False, 'message': _('LOCK_SYNC', sy['name'])}
                 continue
             for e in exprs[1:]:
                 m.Add(exprs[0] == e)
@@ -464,7 +557,7 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
                 for h in range(len(b) - 1):
                     if isinstance(b[h], int) and isinstance(b[h + 1], int):
                         if b[h] < b[h + 1]:
-                            return {'ok': False, 'message': 'Οι κλειδωμένες ώρες αφήνουν κενό στους μαθητές ' + sp['name'] + '.'}
+                            return {'ok': False, 'message': _('LOCK_GAP', sp['name'])}
                         continue
                     m.Add(b[h] >= b[h + 1])
                 if balance:
@@ -651,7 +744,7 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
     best_val, best_k, status = None, -1, cp_model.UNKNOWN
     p1 = m.Clone()
     p1.Add(placed_sum == total_free)
-    phase['text'] = 'Βήμα 1/2: τοποθέτηση όλων των ωρών…'
+    phase['text'] = _('STEP1')
     st1, sv1 = run(p1, seconds * 0.4, False)
     if st1 in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         best_k, best_val, status = total_free, {v.Index(): sv1.BooleanValue(v) for (a, ln, xs, p) in units for v in list(xs.values()) + [p]}, st1
@@ -659,7 +752,7 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
         # δεν χωράνε όλες: όσο περισσότερες γίνεται
         p1b = m.Clone()
         p1b.Maximize(placed_sum)
-        phase['text'] = 'Βήμα 1/2: δεν χωρούν όλες — όσο περισσότερες γίνεται…'
+        phase['text'] = _('STEP1B')
         st1b, sv1b = run(p1b, seconds * 0.3, False)
         if st1b in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             best_k = int(sv1b.Value(placed_sum))
@@ -675,7 +768,7 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
         hint_from(p2, lambda v: best_val[v.Index()])
         if soft:
             p2.Minimize(sum(soft))
-        phase['text'] = 'Βήμα 2/2: λιγότερα κενά, καλύτερη κατανομή…'
+        phase['text'] = _('STEP2')
         st2, sv2 = run(p2, max(2.0, seconds - (time.time() - t0)), bool(soft))
         if st2 in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             solver, status = sv2, st2
@@ -694,15 +787,15 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
     if solver is not None:
         for (a, ln, xs, p) in units:
             if not solver.BooleanValue(p):
-                unplaceable.append({'aid': a['id'], 'len': ln, 'why': 'δεν χωράει χωρίς σύγκρουση με τους αυστηρούς κανόνες'})
+                unplaceable.append({'aid': a['id'], 'len': ln, 'why': _('NO_FIT')})
         msgs = []
         for u in unplaceable:
             a = by_id[u['aid']]
-            msgs.append(tname(a['t']) + ' · ' + a['label'] + ': ' + str(u['len']) + ' ώρ. χωρίς θέση — ' + u['why'])
+            msgs.append(_('UNPLACED', tname(a['t']), a['label'], u['len'], u['why']))
         return {'ok': True, 'engine': 'OR-Tools', 'schedule': schedule_from(solver.BooleanValue), 'seconds': elapsed,
                 'optimal': status == cp_model.OPTIMAL,
                 'summary': {'hard': 0, 'soft': int(solver.ObjectiveValue()) if soft else 0, 'missing': sum(u['len'] for u in unplaceable)},
                 'unplaceable': unplaceable, 'messages': msgs}
     if status == cp_model.INFEASIBLE:
-        return {'ok': False, 'message': 'Τα δεσμευτικά κενά κάποιου εκπαιδευτικού (ή οι κλειδωμένες ώρες / οι μέγιστες ώρες την ημέρα) δεν γίνεται να τηρηθούν μαζί με τους υπόλοιπους κανόνες. Έλεγξε τα κενά που έχεις ορίσει (π.χ. κάνε τα «Στόχο») ή ξεκλείδωσε ώρες.'}
-    return {'ok': False, 'message': 'Δεν βρέθηκε λύση στον χρόνο που δόθηκε. Δοκίμασε περισσότερο χρόνο.'}
+        return {'ok': False, 'message': _('INFEAS')}
+    return {'ok': False, 'message': _('TIMEOUT')}

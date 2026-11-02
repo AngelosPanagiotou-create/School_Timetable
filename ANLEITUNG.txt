@@ -1,0 +1,119 @@
+ΩΡΟΛΟΓΙΟ (STUNDENPLAN) — Version 2.2
+===================================
+Wochenstundenplan der Lehrkräfte mit automatischem Füllen.
+
+
+1. INSTALLATION
+---------------
+• Entpacke den Ordner an einen dauerhaften Ort (z. B. in Dokumente).
+• Doppelklicke auf „Start.cmd“ (entspricht „Εκκίνηση.cmd“).
+  – Fehlt Python, wirst du gefragt, ob es installiert werden soll. Python ist
+    ERFORDERLICH. Es wird von python.org nur für den aktuellen Benutzer
+    installiert (ca. 25 MB, Internet nötig, kein Administratorkennwort).
+  – Beim ersten Mal installiert die App selbst die Bibliotheken PySide6 und
+    OR-Tools (2–5 Minuten) und legt ein Symbol „Ωρολόγιο“ auf dem Desktop an.
+• Die Dateien Ωρολόγιο.pyw, Ωρολόγιο.html und orologio_cpsat.py müssen
+  zusammenbleiben. Sie behalten ihre griechischen Namen, das ist normal.
+• Sprache: beim ersten Start wählst du Ελληνικά, English, Français, Deutsch
+  oder Español. Jederzeit änderbar unter Einstellungen & Datei → „Sprache“.
+
+
+2. SCHULEN
+----------
+• Beim ersten Start gibst du deine Schule ein (Name, Schuljahr) und ihre
+  ÖFFNUNGSZEITEN: ein Raster Montag–Samstag × 1.–10. Stunde; klicke auf die
+  Stunden, in denen die Schule geöffnet ist (z. B. freitags nur bis zur
+  6. Stunde). Änderbar unter Einstellungen & Datei → Schule → Öffnungszeiten
+  → „Ändern“.
+• Links über dem Menü steht die Liste „Schulen“.
+  – Klick auf eine Schule öffnet sie.
+  – „+ Schule hinzufügen“ (jederzeit): eine neue leere Schule oder „Aus
+    Sicherungsdatei…“, um eine Schule aus einer .json-Datei zu holen
+    (Einstellungen & Datei → Sicherung exportieren, auf einem anderen Computer).
+• Jede Schule hat eigene Lehrkräfte, Klassen, Zuweisungen, Zonen, Stundenplan,
+  Sicherungen und Ausdrucke.
+• Schule löschen: Einstellungen & Datei → „Schule löschen“. Vorher wird eine
+  Sicherung angelegt; der Ordner kommt nach „διαγραμμένα σχολεία“
+  (gelöschte Schulen).
+
+Speicherort: Dokumente\Ωρολόγιο\σχολεία\<Schule>\
+   data.json       → alle Daten der Schule
+   αντίγραφα\      → Sicherungen
+   εκτυπώσεις\     → jedes erstellte PDF, mit Datum und Uhrzeit
+
+
+3. REIHENFOLGE
+--------------
+1. Klassen
+   • „Schnell A1–C3“ für die normalen Klassen.
+   • Mischgruppen: Kurse, die einer oder mehreren Klassen zugeordnet sind
+     (z. B. eine Französischgruppe aus Schülern von A1 und A2).
+   • „Gleichzeitige Kurse“: Klassen ankreuzen, beliebigen Namen eingeben
+     (z. B. „Fremdsprachen A“) und speichern. Sie finden immer zur selben Zeit
+     statt. Optional: „nur bis zur N. Stunde“ und „eigene Zeilen im Druck“.
+     Beliebig viele Gruppen; Klick auf eine Gruppe in der Liste zum Ändern.
+     ACHTUNG: Teilt sich eine Klasse und haben die Hälften unterschiedlichen
+     Unterricht, lege die Hälften als eigene Mischgruppen mit verschiedenen
+     Namen an (z. B. B1a und B1b, zugeordnet zu B1) und nimm sie in eine Gruppe.
+   • „Zone“: Namen geben (z. B. „Profilkurse Jahrgang C“) und ihre Stunden jetzt
+     oder später festlegen. Unter „Kurse der Zone“ ihre Kurse wählen. Sie finden
+     gleichzeitig und nur in der Zone statt; in der Zone liegt keine andere
+     Stunde desselben Jahrgangs. Mehrere Zonen sind möglich.
+2. Lehrkräfte
+   • Fach, Unterrichtsstunden, Funktion (Schulleitung / Stellvertretung — für
+     die Reihenfolge im Druck).
+   • Verfügbarkeit: Klick auf eine Stunde → Verfügbar → Lieber nicht → Gesperrt.
+   • Springstunden & Tag:
+     – „Springstunden pro Woche“ = GENAU so viele insgesamt.
+     – „Höchstens wie viele Springstunden pro Tag“ = an keinem Tag mehr.
+       z. B. 3 pro Woche + höchstens 1 pro Tag → je 1 an drei Tagen, 0 an den anderen.
+     – Ohne Zahl: Ziel sind null Springstunden.
+     – „Genau diese (verbindlich)“ oder „Ziel (wenn möglich)“.
+     – Eine gesperrte Stunde zählt nicht als Springstunde.
+   • Höchstens Unterrichtsstunden pro Tag (nur Unterrichtsstunden zählen).
+3. Zuweisungen (unten in der Karte der Lehrkraft)
+   • Klasse, Stunden pro Woche, Doppel- / Dreifachstunden, wie oft pro Tag,
+     „keine aufeinanderfolgenden Tage“.
+4. Stundenplan → „Automatisch füllen“
+   • Je mehr Zeit (60–300 Sek.), desto besser die Lösung.
+   • Gleichmäßige Verteilung und „Gleiche Springstunden für alle“ stellst du in
+     den Einstellungen ein.
+
+
+4. ÄNDERUNGEN VON HAND
+----------------------
+• Ziehe ein Kästchen in eine andere Stunde (gleiche oder andere Zeile) — sie
+  werden getauscht.
+• Doppelklick = sperren (automatisches Füllen verschiebt es nicht).
+• Rechtsklick = Optionen: sperren, entfernen, Doppelstunde, Zuweisung bearbeiten.
+• Doppelstunden haben einen Rahmen. Verschiebst du eine der beiden Stunden,
+  werden daraus zwei Einzelstunden. Neue Doppelstunde: zwei Stunden derselben
+  Klasse nebeneinander → Rechtsklick → „Doppelstunde mit der nächsten/vorherigen“.
+• „Ohne Platz“ (rechts): noch nicht gesetzte Stunden — in eine Stunde ziehen.
+• „Probleme“ (rechts, immer sichtbar):
+  – Einstellungen, die nicht zusammen gelten können → Klick: Karte der Lehrkraft
+  – Im Stundenplan → Klick: die Zeile der Lehrkraft wird markiert
+  – Warnungen (z. B. Verteilung der Schüler) — keine Regelverstöße.
+
+
+5. DRUCKEN
+----------
+• Seite 1: Lehrkräfte (Schulleitung, Stellvertretung, dann nach Fach).
+• Seite 2: Klassen, darunter eigene Zeilen für jede Zone und jede
+  „gleichzeitig“-Gruppe mit „eigene Zeilen im Druck“.
+• Die App erstellt ein PDF, öffnet es und behält es im Ordner „εκτυπώσεις“.
+
+
+6. LEHRKRÄFTE AUS EINER TEXTDATEI (.md)
+---------------------------------------
+Eine Zeile pro Lehrkraft:
+   Nachname Vorname, MATHE, A1, A1, B2B2, C-NAT
+Komma = anderer Tag · B2B2 = Doppelstunde · A1A1A1 = Dreifachstunde.
+Die Klassen müssen schon (mit gleichem Namen) auf der Seite „Klassen“ existieren.
+
+
+7. UPDATES
+----------
+Ersetze nur die Programmdateien. Der Datenordner bleibt unberührt; die neue
+Version aktualisiert die Daten selbst. Zur Sicherheit zusätzlich:
+Einstellungen & Datei → „Sicherung exportieren“.

@@ -1,0 +1,115 @@
+ΩΡΟΛΟΓΙΟ (TIMETABLE) — version 2.2
+==================================
+Weekly teacher timetable with automatic filling.
+
+
+1. INSTALLATION
+---------------
+• Unzip the folder somewhere permanent (e.g. in Documents).
+• Double-click "Start.cmd" (it is the same as "Εκκίνηση.cmd").
+  – If Python is missing, it asks whether to install it. Python is REQUIRED.
+    It is installed from python.org for the current user only (about 25 MB,
+    internet needed, no administrator password).
+  – The first time, the app installs the PySide6 and OR-Tools libraries by
+    itself (2–5 minutes) and creates an "Ωρολόγιο" icon on the desktop.
+• The files Ωρολόγιο.pyw, Ωρολόγιο.html and orologio_cpsat.py must stay together.
+  They keep their Greek names; that is normal.
+• Language: at the first start you choose Ελληνικά, English, Français, Deutsch
+  or Español. Change it any time in Settings & file → "Language".
+
+
+2. SCHOOLS
+----------
+• At the first start you enter your school (name, school year) and its OPENING
+  HOURS: a Monday–Saturday × period 1–10 grid; click the periods when the school
+  is open (e.g. Friday only until period 6). Change them any time in
+  Settings & file → School → School hours → "Change".
+• On the left, above the menu, is the "Schools" list.
+  – Click a school to open it.
+  – "+ Add school" (any time): a new empty school, or "From backup file…" to
+    bring a school from a .json file (Settings & file → Export backup on
+    another computer).
+• Each school has its own teachers, classes, assignments, zones, timetable,
+  backups and prints.
+• Delete a school: Settings & file → "Delete school". A backup is kept first and
+  its folder is moved to "διαγραμμένα σχολεία" (deleted schools).
+
+Where data is stored: Documents\Ωρολόγιο\σχολεία\<school>\
+   data.json       → all the school's data
+   αντίγραφα\      → backups
+   εκτυπώσεις\     → every PDF you create, with date and time
+
+
+3. ORDER OF WORK
+----------------
+1. Classes
+   • "Quick A1–C3" for the regular classes.
+   • Mixed groups: lessons charged to one or more classes (e.g. a French group
+     made of students from A1 and A2).
+   • "Lessons at the same time": tick the classes, write any name you like
+     (e.g. "Foreign languages A") and save. They always take place at the same
+     time. Optional: "only up to period N" and "separate rows in print". You can
+     have as many groups as you like; click a group in the list to change it.
+     NOTE: if a class splits in half and the two halves have different lessons,
+     declare the halves as separate mixed groups with different names
+     (e.g. B1a and B1b, charged to B1) and put them together in one group.
+   • "Zone": give it a name (e.g. "Year C tracks") and set its periods now or
+     later. Under "Zone lessons" choose its lessons. They take place at the same
+     time and only inside the zone; no other lesson of the same year is placed
+     inside the zone. You can have more than one zone.
+2. Teachers
+   • Subject code, teaching periods, role (Principal / Deputy — for the order
+     in print).
+   • Availability: click a period → Available → Better not → Unavailable.
+   • Gaps & day:
+     – "Gaps per week" = EXACTLY this many in total.
+     – "At most how many gaps per day" = never more on any day.
+       e.g. 3 per week + at most 1 per day → 1 gap on three days, 0 on the others.
+     – No number: the timetable aims for zero gaps.
+     – "Exactly these (binding)" or "Target (if possible)".
+     – A period when the teacher is unavailable does not count as a gap.
+   • Maximum teaching periods per day (only lesson periods count).
+3. Assignments (at the bottom of the teacher's card)
+   • Class, periods per week, double / triple periods, times per day,
+     "no consecutive days".
+4. Timetable → "Auto-fill"
+   • The more time you give (60–300 sec.), the better the solution.
+   • Even spread and "Equal gaps for everyone" are set in Settings.
+
+
+4. MANUAL CHANGES
+-----------------
+• Drag a box to another period (same or another row) — they swap.
+• Double-click = lock (auto-fill will not move it).
+• Right-click = options: lock, remove, double period, edit assignment.
+• Double periods have a frame. If you move one of the two periods elsewhere,
+  it becomes two single periods. New double period: two periods of the same
+  class side by side → right-click → "Double period with the next/previous one".
+• "Unplaced" (right): periods not yet placed — drag them to a period.
+• "Problems" (right, always visible):
+  – Settings that cannot all hold together → click: teacher card
+  – In the timetable → click: the teacher's row is highlighted
+  – Warnings (e.g. student even spread) — these are not rule violations.
+
+
+5. PRINTING
+-----------
+• Page 1: teachers (Principal, Deputies, then by subject code).
+• Page 2: classes, and below them separate rows for each zone and for each
+  "simultaneous" group with "separate rows in print".
+• The app creates a PDF, opens it and keeps it in the "εκτυπώσεις" folder.
+
+
+6. TEACHERS FROM A TEXT FILE (.md)
+----------------------------------
+One line per teacher:
+   Surname Name, MATH, A1, A1, B2B2, C-SCI
+comma = another day · B2B2 = double period · A1A1A1 = triple period.
+The classes must already exist (with the same name) on the "Classes" page.
+
+
+7. UPDATES
+----------
+Replace only the application files. The data folder is not touched; the new
+version upgrades the data by itself. For extra safety:
+Settings & file → "Export backup".

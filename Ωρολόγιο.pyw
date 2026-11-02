@@ -11,8 +11,94 @@ import threading
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 HTML = os.path.join(APP_DIR, 'Ωρολόγιο.html')
-VERSION = '2.1'
+VERSION = '2.2'
 NEEDED = ['PySide6', 'ortools']
+
+
+# ---------------------------------------------------------------- γλώσσα
+def documents_dir():
+    if os.name == 'nt':
+        try:
+            import ctypes
+            buf = ctypes.create_unicode_buffer(260)
+            if ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buf) == 0 and buf.value:
+                return buf.value
+        except Exception:
+            pass
+    return os.path.join(os.path.expanduser('~'), 'Documents')
+
+
+LANG_FILE = os.path.join(documents_dir(), 'Ωρολόγιο', 'lang.txt')
+LANGS = ('el', 'en', 'fr', 'de', 'es')
+
+
+def saved_lang():
+    try:
+        with open(LANG_FILE, encoding='utf-8') as f:
+            v = f.read().strip()
+        return v if v in LANGS else None
+    except Exception:
+        return None
+
+
+def system_lang():
+    try:
+        if os.name == 'nt':
+            import ctypes
+            prim = ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0x3FF
+            return {0x08: 'el', 0x09: 'en', 0x0C: 'fr', 0x07: 'de', 0x0A: 'es'}.get(prim, 'en')
+        import locale
+        code = (locale.getlocale()[0] or 'en')[:2].lower()
+        return code if code in LANGS else 'en'
+    except Exception:
+        return 'en'
+
+
+LANG = saved_lang() or system_lang()
+TXT = {
+    'first_run': {'el': 'Ωρολόγιο — πρώτη εκκίνηση', 'en': 'Timetable — first start', 'fr': 'Emploi du temps — premier démarrage', 'de': 'Stundenplan — erster Start', 'es': 'Horario — primer inicio'},
+    'installing': {'el': 'Εγκατάσταση όσων χρειάζεται η εφαρμογή (μόνο την πρώτη φορά).\nΜπορεί να πάρει μερικά λεπτά — χρειάζεται internet.',
+                   'en': 'Installing what the app needs (first time only).\nIt may take a few minutes — internet is required.',
+                   'fr': 'Installation de ce dont l’application a besoin (la première fois seulement).\nCela peut prendre quelques minutes — internet nécessaire.',
+                   'de': 'Installation der benötigten Komponenten (nur beim ersten Mal).\nDas kann einige Minuten dauern — Internet erforderlich.',
+                   'es': 'Instalando lo que necesita la aplicación (solo la primera vez).\nPuede tardar unos minutos; se necesita internet.'},
+    'install_failed': {'el': 'Δεν ολοκληρώθηκε η εγκατάσταση.', 'en': 'The installation did not complete.', 'fr': 'L’installation n’a pas abouti.', 'de': 'Die Installation wurde nicht abgeschlossen.', 'es': 'La instalación no se completó.'},
+    'try_browser': {'el': 'Έλεγξε τη σύνδεση στο internet και ξανατρέξε το Εκκίνηση.cmd.',
+                    'en': 'Check your internet connection and run Start.cmd again.',
+                    'fr': 'Vérifie ta connexion internet et relance Start.cmd.',
+                    'de': 'Prüfe die Internetverbindung und starte Start.cmd erneut.',
+                    'es': 'Comprueba la conexión a internet y vuelve a ejecutar Start.cmd.'},
+    'read_fail': {'el': 'Δεν διαβάστηκε το αρχείο δεδομένων:', 'en': 'The data file could not be read:', 'fr': 'Le fichier de données n’a pas pu être lu :', 'de': 'Die Datendatei konnte nicht gelesen werden:', 'es': 'No se pudo leer el archivo de datos:'},
+    'export': {'el': 'Εξαγωγή αντιγράφου', 'en': 'Export backup', 'fr': 'Exporter une sauvegarde', 'de': 'Sicherung exportieren', 'es': 'Exportar copia'},
+    'import': {'el': 'Εισαγωγή από αρχείο', 'en': 'Import from file', 'fr': 'Importer depuis un fichier', 'de': 'Aus Datei importieren', 'es': 'Importar desde archivo'},
+    'import_t': {'el': 'Εισαγωγή εκπαιδευτικών', 'en': 'Import teachers', 'fr': 'Importer des enseignants', 'de': 'Lehrkräfte importieren', 'es': 'Importar docentes'},
+    'export_t': {'el': 'Εξαγωγή εκπαιδευτικών', 'en': 'Export teachers', 'fr': 'Exporter les enseignants', 'de': 'Lehrkräfte exportieren', 'es': 'Exportar docentes'},
+    'mdtext': {'el': 'Markdown / κείμενο', 'en': 'Markdown / text', 'fr': 'Markdown / texte', 'de': 'Markdown / Text', 'es': 'Markdown / texto'},
+    'or_err': {'el': 'Σφάλμα OR-Tools: ', 'en': 'OR-Tools error: ', 'fr': 'Erreur OR-Tools : ', 'de': 'OR-Tools-Fehler: ', 'es': 'Error de OR-Tools: '},
+    'pdf_fail': {'el': 'Δεν δημιουργήθηκε το PDF. Ίσως είναι ήδη ανοιχτό σε άλλο πρόγραμμα — κλείσ\' το και ξαναδοκίμασε.',
+                 'en': 'The PDF was not created. It may already be open in another program — close it and try again.',
+                 'fr': 'Le PDF n’a pas été créé. Il est peut-être ouvert dans un autre programme — ferme-le et réessaie.',
+                 'de': 'Das PDF wurde nicht erstellt. Vielleicht ist es in einem anderen Programm geöffnet — schließe es und versuche es erneut.',
+                 'es': 'No se creó el PDF. Puede que esté abierto en otro programa: ciérralo y vuelve a intentarlo.'},
+    'unsaved': {'el': 'Υπάρχουν αλλαγές που δεν αποθηκεύτηκαν («{0}»).', 'en': 'There are unsaved changes (“{0}”).', 'fr': 'Il y a des modifications non enregistrées (« {0} »).', 'de': 'Es gibt ungespeicherte Änderungen („{0}“).', 'es': 'Hay cambios sin guardar («{0}»).'},
+    'save': {'el': 'Αποθήκευση', 'en': 'Save', 'fr': 'Enregistrer', 'de': 'Speichern', 'es': 'Guardar'},
+    'nosave': {'el': 'Χωρίς αποθήκευση', 'en': 'Don’t save', 'fr': 'Ne pas enregistrer', 'de': 'Nicht speichern', 'es': 'No guardar'},
+    'cancel': {'el': 'Άκυρο', 'en': 'Cancel', 'fr': 'Annuler', 'de': 'Abbrechen', 'es': 'Cancelar'},
+    'no_html': {'el': 'Λείπει το αρχείο Ωρολόγιο.html.\nΠρέπει να βρίσκεται στον ίδιο φάκελο με το Ωρολόγιο.pyw.',
+                'en': 'The file Ωρολόγιο.html is missing.\nIt must be in the same folder as Ωρολόγιο.pyw.',
+                'fr': 'Le fichier Ωρολόγιο.html est manquant.\nIl doit être dans le même dossier que Ωρολόγιο.pyw.',
+                'de': 'Die Datei Ωρολόγιο.html fehlt.\nSie muss im selben Ordner wie Ωρολόγιο.pyw liegen.',
+                'es': 'Falta el archivo Ωρολόγιο.html.\nDebe estar en la misma carpeta que Ωρολόγιο.pyw.'},
+    'app': {'el': 'Ωρολόγιο', 'en': 'Timetable', 'fr': 'Emploi du temps', 'de': 'Stundenplan', 'es': 'Horario'},
+}
+
+
+def tr(key, *args):
+    m = TXT[key]
+    s = m.get(LANG) or m['el']
+    for i, a in enumerate(args):
+        s = s.replace('{' + str(i) + '}', str(a))
+    return s
 
 
 # ---------------------------------------------------------------- εγκατάσταση
@@ -66,12 +152,12 @@ def install_window(packages):
     except Exception:
         return pip_install(packages)
     root = tk.Tk()
-    root.title('Ωρολόγιο — πρώτη εκκίνηση')
+    root.title(tr('first_run'))
     root.geometry('560x260')
     root.configure(bg='#F4F1E8')
     root.resizable(False, False)
-    tk.Label(root, text='Ωρολόγιο', font=('Palatino Linotype', 24), bg='#F4F1E8', fg='#1B2340').pack(pady=(22, 2))
-    msg = tk.StringVar(value='Εγκατάσταση όσων χρειάζεται η εφαρμογή (μόνο την πρώτη φορά).\nΜπορεί να πάρει μερικά λεπτά — χρειάζεται internet.')
+    tk.Label(root, text=tr('app'), font=('Palatino Linotype', 24), bg='#F4F1E8', fg='#1B2340').pack(pady=(22, 2))
+    msg = tk.StringVar(value=tr('installing'))
     tk.Label(root, textvariable=msg, font=('Segoe UI', 10), bg='#F4F1E8', fg='#1B2340', justify='center').pack(pady=6)
     bar = ttk.Progressbar(root, mode='indeterminate', length=440)
     bar.pack(pady=10)
@@ -108,12 +194,7 @@ def bootstrap():
     res = install_window(miss)
     still = missing_packages()
     if 'PySide6' in still:
-        show_error('Ωρολόγιο', 'Δεν ολοκληρώθηκε η εγκατάσταση.\n\n' + (res.get('err') or '') +
-                   '\n\nΜπορείς να χρησιμοποιήσεις την έκδοση browser: άνοιξε το αρχείο Ωρολόγιο.html με διπλό κλικ.')
-        try:
-            os.startfile(HTML)  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        show_error(tr('app'), tr('install_failed') + '\n\n' + (res.get('err') or '') + '\n\n' + tr('try_browser'))
         return False
     # ξαναξεκινά καθαρά, ώστε να φορτωθούν οι νέες βιβλιοθήκες
     subprocess.Popen([sys.executable, os.path.abspath(__file__)], cwd=APP_DIR)
@@ -243,6 +324,20 @@ def run_app():
                 return str(e)
 
         @Slot(str, result=str)
+        def setLang(self, code):
+            global LANG
+            try:
+                if code in LANGS:
+                    os.makedirs(os.path.dirname(LANG_FILE), exist_ok=True)
+                    with open(LANG_FILE, 'w', encoding='utf-8') as f:
+                        f.write(code)
+                    LANG = code
+                    self.win.set_lang_script()
+                return 'ok'
+            except Exception as e:
+                return str(e)
+
+        @Slot(str, result=str)
         def setCurrent(self, sid):
             CUR['id'] = sid
             school_dir()
@@ -270,7 +365,7 @@ def run_app():
             except FileNotFoundError:
                 return ''
             except Exception as e:
-                QMessageBox.warning(self.win, 'Ωρολόγιο', f'Δεν διαβάστηκε το αρχείο δεδομένων:\n{e}')
+                QMessageBox.warning(self.win, tr('app'), tr('read_fail') + f'\n{e}')
                 return ''
 
         @Slot(str, result=str)
@@ -298,7 +393,7 @@ def run_app():
 
         @Slot(str, str, result=str)
         def exportFile(self, text, name):
-            path, _ = QFileDialog.getSaveFileName(self.win, 'Εξαγωγή αντιγράφου', os.path.join(docs, name), 'Ωρολόγιο (*.json)')
+            path, _ = QFileDialog.getSaveFileName(self.win, tr('export'), os.path.join(docs, name), tr('app') + ' (*.json)')
             if not path:
                 return ''
             write_atomic(path, text)
@@ -306,7 +401,7 @@ def run_app():
 
         @Slot(result=str)
         def importFile(self):
-            path, _ = QFileDialog.getOpenFileName(self.win, 'Εισαγωγή από αρχείο', docs, 'Ωρολόγιο (*.json)')
+            path, _ = QFileDialog.getOpenFileName(self.win, tr('import'), docs, tr('app') + ' (*.json)')
             if not path:
                 return ''
             with open(path, encoding='utf-8') as f:
@@ -314,7 +409,7 @@ def run_app():
 
         @Slot(result=str)
         def openText(self):
-            path, _ = QFileDialog.getOpenFileName(self.win, 'Εισαγωγή εκπαιδευτικών', docs, 'Markdown / κείμενο (*.md *.txt)')
+            path, _ = QFileDialog.getOpenFileName(self.win, tr('import_t'), docs, tr('mdtext') + ' (*.md *.txt)')
             if not path:
                 return ''
             with open(path, 'rb') as f:
@@ -328,7 +423,7 @@ def run_app():
 
         @Slot(str, str, result=str)
         def saveText(self, text, name):
-            path, _ = QFileDialog.getSaveFileName(self.win, 'Εξαγωγή εκπαιδευτικών', os.path.join(docs, name), 'Markdown (*.md)')
+            path, _ = QFileDialog.getSaveFileName(self.win, tr('export_t'), os.path.join(docs, name), 'Markdown (*.md)')
             if not path:
                 return ''
             write_atomic(path, text)
@@ -361,7 +456,7 @@ def run_app():
                                                progress=lambda p: self.solveProgress.emit(json.dumps(p)),
                                                stopper=lambda: self._stop)
                 except Exception as e:
-                    res = {'ok': False, 'message': 'Σφάλμα OR-Tools: ' + str(e)}
+                    res = {'ok': False, 'message': tr('or_err') + str(e)}
                 self.solveDone.emit(json.dumps(res))
             threading.Thread(target=work, daemon=True).start()
 
@@ -381,7 +476,7 @@ def run_app():
     class Window(QMainWindow):
         def __init__(self):
             super().__init__()
-            self.setWindowTitle('Ωρολόγιο')
+            self.setWindowTitle(tr('app'))
             self.setWindowIcon(QIcon(make_icon()))
             self.resize(QSize(1480, 940))
             self.view = QWebEngineView(self)
@@ -403,6 +498,8 @@ def run_app():
                 sc.setWorldId(QWebEngineScript.MainWorld)
                 sc.setRunsOnSubFrames(False)
                 self.view.page().scripts().insert(sc)
+            self.lang_script = None
+            self.set_lang_script()
             self.bridge = Bridge(self)
             self.channel = QWebChannel(self.view.page())
             self.channel.registerObject('native', self.bridge)
@@ -410,11 +507,29 @@ def run_app():
             self.view.page().pdfPrintingFinished.connect(self.pdf_done)
             self.view.load(QUrl.fromLocalFile(HTML))
 
+        def set_lang_script(self):
+            # η γλώσσα που διάλεξε ο χρήστης (lang.txt) περνά στη σελίδα πριν φορτωθεί
+            scripts = self.view.page().scripts()
+            if self.lang_script is not None:
+                scripts.remove(self.lang_script)
+                self.lang_script = None
+            code = saved_lang()
+            if not code:
+                return
+            sc = QWebEngineScript()
+            sc.setName('orologio-lang')
+            sc.setSourceCode('window.__LANG_INJ = ' + json.dumps(code) + ';')
+            sc.setInjectionPoint(QWebEngineScript.DocumentCreation)
+            sc.setWorldId(QWebEngineScript.MainWorld)
+            sc.setRunsOnSubFrames(False)
+            scripts.insert(sc)
+            self.lang_script = sc
+
         def pdf_done(self, path, ok):
             if ok:
                 QDesktopServices.openUrl(QUrl.fromLocalFile(path))
             else:
-                QMessageBox.warning(self, 'Ωρολόγιο', 'Δεν δημιουργήθηκε το PDF. Ίσως είναι ήδη ανοιχτό σε άλλο πρόγραμμα — κλείσ\' το και ξαναδοκίμασε.')
+                QMessageBox.warning(self, tr('app'), tr('pdf_fail'))
 
         def closeEvent(self, ev):
             if self.closing_ok:
@@ -429,11 +544,11 @@ def run_app():
                 if not name:
                     return self._save_and_close()
                 box = QMessageBox(self)
-                box.setWindowTitle('Ωρολόγιο')
-                box.setText('Υπάρχουν αλλαγές που δεν αποθηκεύτηκαν («' + str(name) + '»).')
-                bs = box.addButton('Αποθήκευση', QMessageBox.AcceptRole)
-                bd = box.addButton('Χωρίς αποθήκευση', QMessageBox.DestructiveRole)
-                box.addButton('Άκυρο', QMessageBox.RejectRole)
+                box.setWindowTitle(tr('app'))
+                box.setText(tr('unsaved', name))
+                bs = box.addButton(tr('save'), QMessageBox.AcceptRole)
+                bd = box.addButton(tr('nosave'), QMessageBox.DestructiveRole)
+                box.addButton(tr('cancel'), QMessageBox.RejectRole)
                 box.exec()
                 if box.clickedButton() is bs:
                     self.view.page().runJavaScript('window.__orologio.saveDrafts()', 0, lambda ok: self._save_and_close() if ok else setattr(self, 'asked_drafts', False))
@@ -494,7 +609,7 @@ def run_app():
     app = QApplication(sys.argv)
     app.setApplicationName('Ωρολόγιο')
     if not os.path.exists(HTML):
-        QMessageBox.critical(None, 'Ωρολόγιο', 'Λείπει το αρχείο Ωρολόγιο.html.\nΠρέπει να βρίσκεται στον ίδιο φάκελο με το Ωρολόγιο.pyw.')
+        QMessageBox.critical(None, tr('app'), tr('no_html'))
         return
     win = Window()
     win.showMaximized()

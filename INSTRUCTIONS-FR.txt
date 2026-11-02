@@ -1,0 +1,120 @@
+ΩΡΟΛΟΓΙΟ (EMPLOI DU TEMPS) — version 2.2
+=======================================
+Emploi du temps hebdomadaire des enseignants, avec remplissage automatique.
+
+
+1. INSTALLATION
+---------------
+• Décompresse le dossier dans un endroit durable (ex. dans Documents).
+• Double-clique sur « Start.cmd » (identique à « Εκκίνηση.cmd »).
+  – Si Python manque, il te demande s’il faut l’installer. Python est
+    OBLIGATOIRE. Il est installé depuis python.org pour l’utilisateur actuel
+    seulement (environ 25 Mo, internet nécessaire, sans mot de passe
+    administrateur).
+  – La première fois, l’application installe seule les bibliothèques PySide6
+    et OR-Tools (2 à 5 minutes) et crée une icône « Ωρολόγιο » sur le bureau.
+• Les fichiers Ωρολόγιο.pyw, Ωρολόγιο.html et orologio_cpsat.py doivent rester
+  ensemble. Ils gardent leurs noms grecs, c’est normal.
+• Langue : au premier démarrage tu choisis Ελληνικά, English, Français,
+  Deutsch ou Español. Modifiable à tout moment dans Réglages & fichier → « Langue ».
+
+
+2. ÉTABLISSEMENTS
+-----------------
+• Au premier démarrage tu saisis ton établissement (nom, année scolaire) et ses
+  HORAIRES D’OUVERTURE : une grille lundi–samedi × 1re–10e heure ; clique sur
+  les heures où l’établissement est ouvert (ex. vendredi seulement jusqu’à la
+  6e heure). Modifiables dans Réglages & fichier → École → Horaires d’ouverture
+  → « Modifier ».
+• À gauche, au-dessus du menu, se trouve la liste « Écoles ».
+  – Un clic sur une école l’ouvre.
+  – « + Ajouter une école » (à tout moment) : une nouvelle école vide, ou
+    « Depuis une sauvegarde… » pour importer une école depuis un fichier .json
+    (Réglages & fichier → Exporter une sauvegarde, sur un autre ordinateur).
+• Chaque école a ses propres enseignants, classes, affectations, zones, emploi
+  du temps, sauvegardes et impressions.
+• Supprimer une école : Réglages & fichier → « Supprimer l’école ». Une
+  sauvegarde est faite d’abord et son dossier va dans « διαγραμμένα σχολεία »
+  (écoles supprimées).
+
+Emplacement des données : Documents\Ωρολόγιο\σχολεία\<école>\
+   data.json       → toutes les données de l’école
+   αντίγραφα\      → sauvegardes
+   εκτυπώσεις\     → chaque PDF créé, avec date et heure
+
+
+3. ORDRE DE TRAVAIL
+-------------------
+1. Classes
+   • « Rapide A1–C3 » pour les classes normales.
+   • Groupes mixtes : cours rattachés à une ou plusieurs classes (ex. un groupe
+     d’allemand formé d’élèves de A1 et A2).
+   • « Cours simultanés » : coche les classes, écris le nom de ton choix
+     (ex. « Langues étrangères A ») et enregistre. Ils ont toujours lieu en même
+     temps. En option : « seulement jusqu’à la Ne heure » et « lignes séparées à
+     l’impression ». Autant de groupes que tu veux ; clic sur un groupe de la
+     liste pour le modifier.
+     ATTENTION : si une classe se divise en deux et que les moitiés ont des cours
+     différents, déclare les moitiés comme groupes mixtes distincts avec des noms
+     différents (ex. B1a et B1b, rattachés à B1) et mets-les dans un même groupe.
+   • « Zone » : donne-lui un nom (ex. « Options de terminale ») et définis ses
+     heures maintenant ou plus tard. Dans « Cours de la zone », choisis ses cours.
+     Ils ont lieu en même temps et seulement dans la zone ; aucun autre cours du
+     même niveau n’est placé dans la zone. Plusieurs zones sont possibles.
+2. Enseignants
+   • Spécialité, heures d’enseignement, fonction (directeur / adjoint — pour
+     l’ordre à l’impression).
+   • Disponibilité : clic sur une heure → Disponible → Plutôt pas → Indisponible.
+   • Trous & journée :
+     – « Trous par semaine » = EXACTEMENT ce nombre au total.
+     – « Au plus combien de trous par jour » = jamais plus un jour donné.
+       ex. 3 par semaine + au plus 1 par jour → 1 trou sur trois jours, 0 les autres.
+     – Sans nombre : on vise zéro trou.
+     – « Exactement (obligatoire) » ou « Objectif (si possible) ».
+     – Une heure d’indisponibilité ne compte pas comme trou.
+   • Maximum d’heures de cours par jour (seules les heures de cours comptent).
+3. Affectations (en bas de la fiche de l’enseignant)
+   • Classe, heures par semaine, heures doubles / triples, fois par jour,
+     « pas de jours consécutifs ».
+4. Emploi du temps → « Remplissage automatique »
+   • Plus tu donnes de temps (60–300 s), meilleure est la solution.
+   • La répartition équilibrée et les « Trous équitables pour tous » se règlent
+     dans les Réglages.
+
+
+4. MODIFICATIONS À LA MAIN
+--------------------------
+• Glisse une case vers une autre heure (même ligne ou autre) — elles s’échangent.
+• Double-clic = verrouiller (le remplissage automatique ne la déplace pas).
+• Clic droit = options : verrouiller, retirer, heure double, modifier l’affectation.
+• Les heures doubles ont un cadre. Si tu déplaces l’une des deux heures, elles
+  deviennent deux heures simples. Nouvelle heure double : deux heures de la même
+  classe côte à côte → clic droit → « Heure double avec la suivante/précédente ».
+• « Non placées » (à droite) : heures pas encore placées — glisse-les sur une heure.
+• « Problèmes » (à droite, toujours visible) :
+  – Réglages incompatibles → clic : fiche de l’enseignant
+  – Dans l’emploi du temps → clic : la ligne de l’enseignant est mise en évidence
+  – Avertissements (ex. répartition des élèves) — ce ne sont pas des violations.
+
+
+5. IMPRESSION
+-------------
+• Page 1 : enseignants (directeur, adjoints, puis par spécialité).
+• Page 2 : classes, puis des lignes séparées pour chaque zone et pour chaque
+  groupe « simultané » avec « lignes séparées à l’impression ».
+• L’application crée un PDF, l’ouvre et le garde dans le dossier « εκτυπώσεις ».
+
+
+6. ENSEIGNANTS DEPUIS UN FICHIER TEXTE (.md)
+--------------------------------------------
+Une ligne par enseignant :
+   Nom Prénom, MATH, A1, A1, B2B2, C-SCI
+virgule = autre jour · B2B2 = heure double · A1A1A1 = heure triple.
+Les classes doivent déjà exister (avec le même nom) dans la page « Classes ».
+
+
+7. MISES À JOUR
+---------------
+Remplace seulement les fichiers de l’application. Le dossier de données n’est
+pas touché ; la nouvelle version met à jour les données toute seule. Par
+sécurité : Réglages & fichier → « Exporter une sauvegarde ».
