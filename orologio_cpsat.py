@@ -155,6 +155,8 @@ def build(data):
     cby = {c['id']: c for c in data['classes']}
     sets, stag, smerges = sync_sets(data)
     zones = set((data.get('settings') or {}).get('zonesG') or [])
+    if (data.get('school') or {}).get('type', 'lyceum') != 'lyceum':
+        zones = set()   # ζώνες κατεύθυνσης υπάρχουν μόνο στο Λύκειο
     zone_bases = set()   # τμήματα (Γ1, Γ2…) που έχουν κατεύθυνση Γ΄
     for c in data['classes']:
         if c.get('category') == 'dirG' and is_mixed(c):

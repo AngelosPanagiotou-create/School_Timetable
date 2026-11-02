@@ -483,7 +483,9 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
   // «Από την … έως την … ώρα» (1-based, κενό = χωρίς όριο)
   function inRange(a, h) { return (!(a.fromHour > 0) || h + 1 >= a.fromHour) && (!(a.toHour > 0) || h + 1 <= a.toHour); }
   // Ζώνες κατεύθυνσης Γ΄: τα μαθήματα κατεύθυνσης Γ΄ μπαίνουν μόνο μέσα στις ζώνες που δήλωσε ο χρήστης
-  function zonesG(data) { var z = (data.settings || {}).zonesG; return Array.isArray(z) ? z : []; }
+  function zonesG(data) {   // ζώνες κατεύθυνσης υπάρχουν μόνο στο Λύκειο
+    if (data.school && data.school.type && data.school.type !== 'lyceum') return [];
+    var z = (data.settings || {}).zonesG; return Array.isArray(z) ? z : []; }
   // Τμήματα (Γ1, Γ2…) που έχουν κατεύθυνση Γ΄ — η γενική τους παιδεία και τα Κόντρα δεν μπαίνουν ποτέ στη ζώνη
   var ZB_CACHE = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
   function zoneBases(data) {
@@ -1484,14 +1486,14 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
   // «Εισαγωγή σχολείου»: νέο κενό σχολείο ή από αρχείο αντιγράφου (.json)
   function newSchoolDialog(first) {
     var m, nm = h('input', { class: 'inp', placeholder: 'π.χ. 2ο Γενικό Λύκειο …' }), yr = h('input', { class: 'inp', placeholder: 'π.χ. 2026–27' });
-    var days = 5, hours = 7;
+    var days = 5, hours = 7, stype = 'lyceum';
     var sel = function (vals, cur, fn) { var x = h('select', { class: 'inp' }, vals.map(function (v) { var o = h('option', { value: v }, String(v)); if (v === cur) o.selected = true; return o; })); x.onchange = function () { fn(+x.value); }; return x; };
     function create(data) {
       var name = (nm.value || '').trim() || schoolNameOf(data);
       if (!name) { toast('Γράψε το όνομα του σχολείου.', true); nm.focus(); return; }
       var d = data ? migrate(data) : emptyData();
       d.school.name = name; if (yr.value.trim()) d.school.year = yr.value.trim();
-      if (!data) { d.settings.days = days; d.settings.hours = hours; }
+      if (!data) { d.settings.days = days; d.settings.hours = hours; d.school.type = stype; }
       var id = 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
       SCH.list.push({ id: id, name: name }); m.close();
       switchSchool(id, d);
@@ -1514,6 +1516,9 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
       h('div', { class: 'body' },
         first ? h('div', { style: 'line-height:1.55' }, 'Για να ξεκινήσεις, γράψε το σχολείο σου. Μπορείς να προσθέσεις κι άλλα σχολεία όποτε θέλεις — το καθένα έχει τους δικούς του εκπαιδευτικούς, τμήματα και πρόγραμμα.') : null,
         h('label', { class: 'f' }, h('span', null, 'Όνομα σχολείου (όπως θα τυπώνεται)'), nm),
+        (function () { var seg = h('div', { class: 'seg', role: 'radiogroup', 'aria-label': 'Είδος σχολείου' });
+          var draw = function () { seg.innerHTML = ''; [['lyceum', 'Λύκειο'], ['gym', 'Γυμνάσιο'], ['other', 'Άλλο']].forEach(function (x) { seg.appendChild(h('button', { class: stype === x[0] ? 'on' : '', role: 'radio', 'aria-checked': stype === x[0] ? 'true' : 'false', onclick: function () { stype = x[0]; draw(); } }, x[1])); }); };
+          draw(); return h('div', { class: 'f' }, h('span', null, 'Είδος σχολείου (στο Λύκειο υπάρχουν κατευθύνσεις, ζώνες κατεύθυνσης Γ΄ και Κόντρα)'), seg); })(),
         h('div', { class: 'g3' }, h('label', { class: 'f' }, h('span', null, 'Σχολικό έτος'), yr),
           h('label', { class: 'f' }, h('span', null, 'Ημέρες την εβδομάδα'), sel([5, 6], 5, function (v) { days = v; })),
           h('label', { class: 'f' }, h('span', null, 'Ώρες την ημέρα'), sel([5, 6, 7, 8], 7, function (v) { hours = v; }))),
@@ -1776,7 +1781,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
         st0.addEventListener('click', function () { var p0 = document.querySelector('.issuesbox'); if (p0) { p0.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); p0.classList.add('flash'); setTimeout(function () { p0.classList.remove('flash'); }, 900); } }); return st0; })()));
     var P = pal();
     main.appendChild(h('div', { class: 'legend' },
-      PAL_KEYS.filter(function (k) { return P[k[0]]; }).map(function (k) { return h('span', null, h('i', { class: 'sw', style: 'background:' + P[k[0]] + ';box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)' }), k[1]); }),
+      PAL_KEYS.filter(function (k) { return P[k[0]] && (isLyceum() || ['dirB', 'dirG', 'zone', 'kontra'].indexOf(k[0]) < 0); }).map(function (k) { return h('span', null, h('i', { class: 'sw', style: 'background:' + P[k[0]] + ';box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)' }), k[1]); }),
       h('span', null, h('i', { class: 'sw', style: 'background:#fff;box-shadow:inset 0 0 0 2px #3A4057' }), 'Μικτό τμήμα'),
       h('span', null, h('i', { class: 'sw', style: 'background-color:var(--empty);background-image:radial-gradient(#8A8577 1.2px,transparent 1.4px);background-size:6px 6px' }), 'Κώλυμα'),
       h('span', null, h('i', { class: 'sw', style: 'background:#D93A3A' }), 'Πρόβλημα'),
@@ -1854,7 +1859,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
     }
     function draw() {
       listBox.innerHTML = ''; gridBox.innerHTML = ''; prev.innerHTML = '';
-      PAL_KEYS.forEach(function (k) {
+      PAL_KEYS.filter(function (k) { return isLyceum() || ['dirB', 'dirG', 'zone', 'kontra'].indexOf(k[0]) < 0; }).forEach(function (k) {
         var c = draft[k[0]];
         listBox.appendChild(h('button', { class: 'pal-row' + (cur === k[0] ? ' on' : ''), onclick: function () { cur = k[0]; draw(); } },
           h('i', { class: 'pal-chip' + (c ? '' : ' none'), style: c ? 'background:' + c : null }), h('span', null, k[1]), h('small', null, c || 'Χωρίς χρώμα')));
@@ -2767,6 +2772,8 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
   // όλο το σετ «ταυτόχρονα» ενός μικτού τμήματος (μεταβατικά)
   function syncGroupOf(c) { var info = Engine.syncSets(DB), si = info.setOf[c.id]; return si === undefined || (info.merges[si] || []).indexOf(c.id) >= 0 ? [c.id] : info.sets[si]; }
   var CATS = [['lang', 'Ξένη γλώσσα'], ['dirB', 'Κατεύθυνση Β΄ Λυκείου'], ['dirG', 'Κατεύθυνση Γ΄ Λυκείου'], ['kontra', 'Κόντρα'], ['', 'Άλλο']];
+  function isLyceum() { return (DB.school.type || 'lyceum') === 'lyceum'; }
+  function cats() { return isLyceum() ? CATS : CATS.filter(function (x) { return x[0] === 'lang' || x[0] === ''; }); }
   function catName(k) { var c = CATS.filter(function (x) { return x[0] === k; })[0]; return c && k ? c[1] : ''; }
   // Οι αλλαγές σε ένα τμήμα γίνονται σε «πρόχειρο» και περνούν με «Αποθήκευση αλλαγών».
   function classDraftDirty() {
@@ -2845,7 +2852,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
       h('div', { class: 'row', style: 'justify-content:space-between' }, h('h2', null, 'Τμήματα')),
       h('div', { class: 'row', style: 'gap:8px' }, h('button', { class: 'btn sm', onclick: function () { newClass('class'); } }, icon('plus', 14), 'Νέο τμήμα'),
         h('button', { class: 'btn sm', onclick: function () { guardClassDraft(quickClasses); } }, 'Γρήγορα Α1–Γ3')),
-      h('button', { class: 'li' + (zonesView ? ' on' : ''), style: 'background:var(--card);border:1px solid #D9D2C2;box-shadow:0 1px 2px rgba(27,35,64,.06)', onclick: function () { guardClassDraft(function () { ui.classId = '__zones'; render(); }); } },
+      !isLyceum() ? null : h('button', { class: 'li' + (zonesView ? ' on' : ''), style: 'background:var(--card);border:1px solid #D9D2C2;box-shadow:0 1px 2px rgba(27,35,64,.06)', onclick: function () { guardClassDraft(function () { ui.classId = '__zones'; render(); }); } },
         h('b', null, 'Ζώνες κατεύθυνσης Γ΄ Λυκείου'),
         h('small', { style: zc.errors.length || zconf.length ? 'color:#B3261E' : '' }, zc.total ? zc.total + (zc.hours ? ' / ' + zc.hours : '') + ' ώρες' + (zc.errors.length || zconf.length ? ' · χρειάζεται διόρθωση' : ' · εντάξει') : 'δεν έχουν δηλωθεί')),
       h('div', { class: 'items' }, plain.length ? h('div', { class: 'secl' }, 'Τμήματα') : null, plain.map(item), mixed.length ? h('div', { class: 'secl' }, 'Μικτά τμήματα') : null, mixed.map(item)));
@@ -2916,7 +2923,7 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
           mixedOthers.length ? h('div', { class: 'chk' }, mixedOthers.map(memberChip)) : null,
           h('div', { class: 'sub' }, 'Οι ώρες του μετράνε στις ώρες αυτών των τμημάτων, και δεν μπαίνει ποτέ την ίδια ώρα με άλλο μάθημά τους.')),
         h('div', { class: 'f' }, h('span', null, 'Τι είναι'),
-          h('div', { class: 'seg', role: 'radiogroup', 'aria-label': 'Κατηγορία μικτού τμήματος' }, CATS.map(function (x) {
+          h('div', { class: 'seg', role: 'radiogroup', 'aria-label': 'Κατηγορία μικτού τμήματος' }, cats().map(function (x) {
             var on = (draft.category || '') === x[0];
             return h('button', { class: on ? 'on' : '', role: 'radio', 'aria-checked': on ? 'true' : 'false', onclick: function () { draft.category = x[0]; render(); } }, x[1]);
           })),
@@ -3226,6 +3233,9 @@ h2{margin:0;font-family:var(--serif);font-weight:400;font-size:21px}
         h('section', { class: 'card' }, h('div', { class: 'row', style: 'justify-content:space-between' }, h('h2', null, 'Σχολείο'),
             h('button', { class: 'btn sm', onclick: function () { guardDrafts(function () { newSchoolDialog(false); }); } }, icon('plus', 14), 'Εισαγωγή σχολείου')),
           field('Όνομα σχολείου (κεφαλίδα εκτύπωσης)', DB.school, 'name', 'π.χ. 1ο ΓΕΝΙΚΟ ΛΥΚΕΙΟ …'),
+          h('div', { class: 'f' }, h('span', null, 'Είδος σχολείου'), h('div', { class: 'seg', role: 'radiogroup', 'aria-label': 'Είδος σχολείου' },
+            [['lyceum', 'Λύκειο'], ['gym', 'Γυμνάσιο'], ['other', 'Άλλο']].map(function (x) { var on = (DB.school.type || 'lyceum') === x[0];
+              return h('button', { class: on ? 'on' : '', role: 'radio', 'aria-checked': on ? 'true' : 'false', onclick: function () { DB.school.type = x[0]; commit(); } }, x[1]); }))),
           field('Τίτλος εκτύπωσης', DB.school, 'title', 'Συνολικό ωρολόγιο Εκπαιδευτικών'),
           h('div', { class: 'g2' }, field('Σχολικό έτος', DB.school, 'year', 'π.χ. 2026–27'), field('Ισχύει από', DB.school, 'validFrom', 'π.χ. 2/11/2026'))),
         h('section', { class: 'card' }, h('h2', null, 'Μαθητές'),
