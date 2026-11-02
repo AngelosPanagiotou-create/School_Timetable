@@ -60,8 +60,9 @@ Speicherort: Dokumente\Ωρολόγιο\σχολεία\<Schule>\
      gleichzeitig und nur in der Zone statt; in der Zone liegt keine andere
      Stunde desselben Jahrgangs. Mehrere Zonen sind möglich.
 2. Lehrkräfte
-   • Fach, Unterrichtsstunden, Funktion (Schulleitung / Stellvertretung — für
-     die Reihenfolge im Druck).
+   • Fachrichtung: ausgeschrieben (z. B. Physik) oder mit dem Kürzel deines
+     Landes; danach werden die Lehrkräfte sortiert. Unterrichtsstunden, Funktion
+     (Schulleitung / Stellvertretung — für die Reihenfolge im Druck).
    • Verfügbarkeit: Klick auf eine Stunde → Verfügbar → Lieber nicht → Gesperrt.
    • Springstunden & Tag:
      – „Springstunden pro Woche“ = GENAU so viele insgesamt.
@@ -107,7 +108,8 @@ Speicherort: Dokumente\Ωρολόγιο\σχολεία\<Schule>\
 6. LEHRKRÄFTE AUS EINER TEXTDATEI (.md)
 ---------------------------------------
 Eine Zeile pro Lehrkraft:
-   Nachname Vorname, MATHE, A1, A1, B2B2, C-NAT
+   Nachname Vorname, Physik, A1, A1, B2B2, C-NAT
+Das zweite Feld ist die Fachrichtung (optional).
 Komma = anderer Tag · B2B2 = Doppelstunde · A1A1A1 = Dreifachstunde.
 Die Klassen müssen schon (mit gleichem Namen) auf der Seite „Klassen“ existieren.
 

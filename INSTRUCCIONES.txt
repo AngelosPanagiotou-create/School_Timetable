@@ -58,8 +58,9 @@ Dónde se guardan los datos: Documentos\Ωρολόγιο\σχολεία\<centro>
      y solo dentro de la zona; dentro de la zona no se coloca ninguna otra clase
      del mismo curso. Puede haber más de una zona.
 2. Docentes
-   • Especialidad, horas lectivas, cargo (dirección / subdirección — para el
-     orden en la impresión).
+   • Especialidad: completa (p. ej. Física) o con el código de tu país; los
+     docentes se ordenan según ella. Horas lectivas, cargo (dirección /
+     subdirección — para el orden en la impresión).
    • Disponibilidad: clic en una hora → Disponible → Mejor no → No disponible.
    • Huecos y día:
      – «Huecos por semana» = EXACTAMENTE esos en total.
@@ -104,7 +105,8 @@ Dónde se guardan los datos: Documentos\Ωρολόγιο\σχολεία\<centro>
 6. DOCENTES DESDE UN ARCHIVO DE TEXTO (.md)
 -------------------------------------------
 Una línea por docente:
-   Apellido Nombre, MAT, A1, A1, B2B2, C-CIE
+   Apellido Nombre, Física, A1, A1, B2B2, C-CIE
+El segundo campo es la especialidad (opcional).
 coma = otro día · B2B2 = hora doble · A1A1A1 = hora triple.
 Los grupos deben existir ya (con el mismo nombre) en la página «Grupos».
 

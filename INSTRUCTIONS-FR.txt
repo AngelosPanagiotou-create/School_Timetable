@@ -62,8 +62,9 @@ Emplacement des données : Documents\Ωρολόγιο\σχολεία\<école>\
      Ils ont lieu en même temps et seulement dans la zone ; aucun autre cours du
      même niveau n’est placé dans la zone. Plusieurs zones sont possibles.
 2. Enseignants
-   • Spécialité, heures d’enseignement, fonction (directeur / adjoint — pour
-     l’ordre à l’impression).
+   • Spécialité : en toutes lettres (ex. Physique) ou avec le code de ton pays ;
+     les enseignants sont triés selon elle. Heures d’enseignement, fonction
+     (directeur / adjoint — pour l’ordre à l’impression).
    • Disponibilité : clic sur une heure → Disponible → Plutôt pas → Indisponible.
    • Trous & journée :
      – « Trous par semaine » = EXACTEMENT ce nombre au total.
@@ -108,7 +109,8 @@ Emplacement des données : Documents\Ωρολόγιο\σχολεία\<école>\
 6. ENSEIGNANTS DEPUIS UN FICHIER TEXTE (.md)
 --------------------------------------------
 Une ligne par enseignant :
-   Nom Prénom, MATH, A1, A1, B2B2, C-SCI
+   Nom Prénom, Physique, A1, A1, B2B2, C-SCI
+Le deuxième champ est la spécialité (facultatif).
 virgule = autre jour · B2B2 = heure double · A1A1A1 = heure triple.
 Les classes doivent déjà exister (avec le même nom) dans la page « Classes ».
 

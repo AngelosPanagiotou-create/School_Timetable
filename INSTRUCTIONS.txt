@@ -58,8 +58,9 @@ Where data is stored: Documents\Ωρολόγιο\σχολεία\<school>\
      time and only inside the zone; no other lesson of the same year is placed
      inside the zone. You can have more than one zone.
 2. Teachers
-   • Subject code, teaching periods, role (Principal / Deputy — for the order
-     in print).
+   • Subject: write it in full (e.g. Physics) or with the code used in your
+     country; teachers are sorted by it. Teaching periods, role (Principal /
+     Deputy — for the order in print).
    • Availability: click a period → Available → Better not → Unavailable.
    • Gaps & day:
      – "Gaps per week" = EXACTLY this many in total.
@@ -94,7 +95,7 @@ Where data is stored: Documents\Ωρολόγιο\σχολεία\<school>\
 
 5. PRINTING
 -----------
-• Page 1: teachers (Principal, Deputies, then by subject code).
+• Page 1: teachers (Principal, Deputies, then by subject).
 • Page 2: classes, and below them separate rows for each zone and for each
   "simultaneous" group with "separate rows in print".
 • The app creates a PDF, opens it and keeps it in the "εκτυπώσεις" folder.
@@ -103,7 +104,8 @@ Where data is stored: Documents\Ωρολόγιο\σχολεία\<school>\
 6. TEACHERS FROM A TEXT FILE (.md)
 ----------------------------------
 One line per teacher:
-   Surname Name, MATH, A1, A1, B2B2, C-SCI
+   Surname Name, Physics, A1, A1, B2B2, C-SCI
+The second field is the subject (optional).
 comma = another day · B2B2 = double period · A1A1A1 = triple period.
 The classes must already exist (with the same name) on the "Classes" page.
 
