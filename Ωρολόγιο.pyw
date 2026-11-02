@@ -12,7 +12,7 @@ import time
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 HTML = os.path.join(APP_DIR, 'Ωρολόγιο.html')
-VERSION = '2.3'
+VERSION = '2.3.1'
 NEEDED = ['PySide6', 'ortools']
 
 

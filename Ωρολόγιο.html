@@ -694,12 +694,12 @@ function T(k) {
 
   /* ---------- Κατάσταση με πρόσθετο/αφαιρετό κόστος ---------- */
   function State(m) {
-    var T = m.teachers.length, S = m.S;
+    var nT = m.teachers.length, S = m.S;
     this.m = m;
-    this.tOcc = []; for (var t = 0; t < T; t++) this.tOcc.push(new Int16Array(S));
+    this.tOcc = []; for (var t = 0; t < nT; t++) this.tOcc.push(new Int16Array(S));
     this.aDay = m.asg.map(function () { return new Int16Array(m.D); });   // μονάδες ανά ημέρα
     this.res = {};   // base -> slot -> {direct, tags:{tag:{group:cnt}}}
-    this.tCost = new Float64Array(T);
+    this.tCost = new Float64Array(nT);
     this.aCost = new Float64Array(m.asg.length);
     this.spOcc = m.sps.map(function () { return new Int16Array(S); });
     this.spCost = new Float64Array(m.sps.length);
@@ -1165,7 +1165,7 @@ function T(k) {
     units.forEach(function (u) { var seen = {}; u.parts.forEach(function (a) { a.touches.forEach(function (tc) { if (seen[tc.base]) return; seen[tc.base] = 1; (byBase[tc.base] = byBase[tc.base] || []).push(u); }); }); });
     var baseKeys = Object.keys(byBase);
     // ανταλλαγή δύο ωρών ολόκληρου του προγράμματος ενός τμήματος (μαζί και οι παράλληλες ομάδες)
-    function classSwap(T) {
+    function classSwap(temp) {
       var list = byBase[baseKeys[Math.floor(rnd() * baseKeys.length)]];
       var u0 = list[Math.floor(rnd() * list.length)], s1 = u0.start, d1 = Math.floor(s1 / H);
       var s2 = (rnd() < 0.5) ? d1 * H + Math.floor(rnd() * H) : Math.floor(rnd() * m.S);
@@ -1189,7 +1189,7 @@ function T(k) {
       for (i = 0; i < B.length; i++) if (B[i].dom.indexOf(s1) < 0) return;
       var dsum = 0;
       A.forEach(function (u) { dsum += move(u, -1); }); B.forEach(function (u) { dsum += move(u, s1); }); A.forEach(function (u) { dsum += move(u, s2); });
-      if (dsum <= 0 || rnd() < Math.exp(-dsum / T)) cur += dsum;
+      if (dsum <= 0 || rnd() < Math.exp(-dsum / temp)) cur += dsum;
       else { A.forEach(function (u) { move(u, -1); }); B.forEach(function (u) { move(u, s2); }); A.forEach(function (u) { move(u, s1); }); }
     }
     var stop = false;
@@ -1207,15 +1207,15 @@ function T(k) {
         if (bestCost < W_GAP && bestCost === 0) break;
       }
       var frac = Math.min(1, (Date.now() - t0) / (seconds * 1000));
-      var T = T0 * Math.pow(T1 / T0, frac);
+      var temp = T0 * Math.pow(T1 / T0, frac);
       if (!units.length) break;
       var r = rnd();
-      if (m.studentRule && r > 0.82) classSwap(T);
+      if (m.studentRule && r > 0.82) classSwap(temp);
       else if (r < pMove) {
         var u = units[Math.floor(rnd() * units.length)], from = u.start;
         var to = u.dom[Math.floor(rnd() * u.dom.length)]; if (to === from) continue;
         var dl = move(u, to);
-        if (dl <= 0 || rnd() < Math.exp(-dl / T)) cur += dl; else move(u, from);
+        if (dl <= 0 || rnd() < Math.exp(-dl / temp)) cur += dl; else move(u, from);
       } else {
         // ανταλλαγή δύο μονάδων του ίδιου καθηγητή ή του ίδιου τμήματος
         var u1 = units[Math.floor(rnd() * units.length)], list = byTeacher[u1.tl[Math.floor(rnd() * u1.tl.length)]];
@@ -1225,7 +1225,7 @@ function T(k) {
         var s1 = u1.start, s2 = u2.start;
         if (u1.dom.indexOf(s2) < 0 || u2.dom.indexOf(s1) < 0) continue;
         var d1 = move(u1, -1), d2 = move(u2, s1), d3 = move(u1, s2), dsum = d1 + d2 + d3;
-        if (dsum <= 0 || rnd() < Math.exp(-dsum / T)) cur += dsum;
+        if (dsum <= 0 || rnd() < Math.exp(-dsum / temp)) cur += dsum;
         else { move(u1, -1); move(u2, s2); move(u1, s1); }
       }
       if (cur < bestCost - 1e-9) { bestCost = cur; for (var bi = 0; bi < units.length; bi++) bestStarts[bi] = units[bi].start; }
@@ -1313,7 +1313,7 @@ function T(k) {
 <script>/* Ωρολόγιο — διεπαφή. Ίδιο αρχείο για την έκδοση HTML και την έκδοση .pyw. */
 (function () {
   'use strict';
-  var VERSION = '2.3';
+  var VERSION = '2.3.1';
   var BROWSER_MODE = false;   // true = να δουλεύει και σκέτο σε browser (έκδοση που θα ολοκληρωθεί αργότερα)
   var DAYS = [T("Δευτέρα"), T("Τρίτη"), T("Τετάρτη"), T("Πέμπτη"), T("Παρασκευή"), T("Σάββατο")];
   var DSHORT = [T("Δευ"), T("Τρί"), T("Τετ"), T("Πέμ"), T("Παρ"), T("Σάβ")];
