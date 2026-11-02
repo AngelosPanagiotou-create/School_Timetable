@@ -428,6 +428,19 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
             fcount[a['id']] = fcount.get(a['id'], 0) + 1
 
     m = cp_model.CpModel()
+    strict = m.NewBoolVar('strict')   # οι αυστηροί κανόνες εκπαιδευτικών (κενά, μέγιστες ώρες)· 0 = προσωρινά χαλαροί
+    viol = []                         # πόσο παραβιάζονται (0 = τηρούνται)
+
+    def hard_le(expr, lim, ub):
+        ex = m.NewIntVar(0, ub, '')
+        m.Add(ex >= expr - lim)
+        viol.append(ex)
+
+    def hard_eq(expr, lim, ub):
+        ex = m.NewIntVar(0, ub, '')
+        m.Add(ex >= expr - lim)
+        m.Add(ex >= lim - expr)
+        viol.append(ex)
     occ_terms, occ_const, day_terms, day_const = {}, {}, {}, {}
     units, unplaceable, obj = [], [], []
     for (a, s, _l) in fixed:
@@ -626,7 +639,7 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
                     m.Add(lo_b2 >= target_lo[ti] - 1 - sum(w))
                     obj.append(W_BAL * lo_b + W_BAL2 * lo_b2)
             if max_h is not None:
-                m.Add(sum(w) <= max_h)
+                hard_le(sum(w), max_h, H)
             f, l = [], [None] * H
             for h in range(H):
                 fv = m.NewBoolVar('')
@@ -662,7 +675,7 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
             if lim_d is not None:
                 # «έως Ν κενά την ημέρα»: σε καμία μέρα περισσότερα
                 if hard:
-                    m.Add(sum(day_gaps) <= lim_d)
+                    hard_le(sum(day_gaps), lim_d, H)
                 else:
                     ex = m.NewIntVar(0, H, '')
                     m.Add(ex >= sum(day_gaps) - lim_d)
@@ -675,13 +688,16 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
         if lim_w is not None and week_gaps:
             # κενά την εβδομάδα: ΑΚΡΙΒΩΣ τόσα (μοιρασμένα στις μέρες με το όριο «έως Ν την ημέρα»)
             if hard:
-                m.Add(sum(week_gaps) == lim_w)
+                hard_eq(sum(week_gaps), lim_w, S)
             else:
                 ex = m.NewIntVar(0, S, '')
                 m.Add(ex >= sum(week_gaps) - lim_w)
                 m.Add(ex >= lim_w - sum(week_gaps))
                 obj.append(W_SOFT * ex)
     soft = [x for x in obj]   # (οι ώρες χωρίς θέση μετριούνται χωριστά, βλ. παρακάτω)
+    if viol:
+        m.Add(sum(viol) == 0).OnlyEnforceIf(strict)
+    W_VIOL = 5000   # κάθε παραβίαση αυστηρού κανόνα εκπαιδευτικού, όταν δεν γίνεται αλλιώς
     placed_sum = sum(ln * p for (a, ln, xs, p) in units)
     total_free = sum(ln for (a, ln, xs, p) in units)
 
@@ -702,8 +718,6 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
     phase = {'from': 0.0, 'to': 1.0, 'text': '', 'show': True}
     n_alts = max(1, min(5, int(data.get('_alts') or 1)))
     total_seconds = seconds
-    if n_alts > 1:   # το 55% του χρόνου για την καλύτερη λύση, το υπόλοιπο για τις εναλλακτικές
-        seconds = seconds * 0.55
 
     class CB(cp_model.CpSolverSolutionCallback):
         def __init__(self, with_obj):
@@ -755,36 +769,63 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
                 for i in range(ln):
                     pool.discard(pick + i)
 
-    # 1ο βήμα: να μπουν ΟΛΕΣ οι ώρες (χωρίς να κοιτάμε κενά κ.λπ.)
+    # 1ο βήμα: να μπουν ΟΛΕΣ οι ώρες — αυτό προηγείται από όλα
     best_val, best_k, status = None, -1, cp_model.UNKNOWN
-    p1 = m.Clone()
-    p1.Add(placed_sum == total_free)
+    relaxed = False   # True = μπήκαν όλες οι ώρες, αλλά κάποιος αυστηρός κανόνας εκπαιδευτικού δεν τηρείται ακόμα
+    vals_of = lambda sv: {v.Index(): sv.BooleanValue(v) for (a, ln, xs, p) in units for v in list(xs.values()) + [p]}
     phase['text'] = _('STEP1')
-    st1, sv1 = run(p1, seconds * 0.4, False)
-    if st1 in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        best_k, best_val, status = total_free, {v.Index(): sv1.BooleanValue(v) for (a, ln, xs, p) in units for v in list(xs.values()) + [p]}, st1
+    # 1α: όλες οι ώρες, χωρίς (προσωρινά) τα όρια κενών / ωρών των εκπαιδευτικών — βρίσκεται γρήγορα
+    p0 = m.Clone()
+    p0.Add(placed_sum == total_free)
+    p0.Add(strict == 0)
+    st0, sv0 = run(p0, seconds * 0.3, False)
+    if st0 in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        v0 = vals_of(sv0)
+        if viol:
+            # 1β: όλες οι ώρες + όσο λιγότερες παραβιάσεις (σταματά μόλις φτάσει στο 0)
+            p1 = m.Clone()
+            p1.Add(placed_sum == total_free)
+            p1.Add(strict == 0)
+            p1.Minimize(sum(viol))
+            hint_from(p1, lambda v: v0[v.Index()])
+            st1, sv1 = run(p1, max(2.0, seconds * 0.6 - (time.time() - t0)), True)
+            if st1 in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                v0 = vals_of(sv1)
+                relaxed = sv1.ObjectiveValue() > 0
+        best_k, best_val, status = total_free, v0, cp_model.FEASIBLE
     elif not (stopper and stopper()):
-        # δεν χωράνε όλες: όσο περισσότερες γίνεται
+        # δεν χωράνε όλες ούτε έτσι: όσο περισσότερες γίνεται
         p1b = m.Clone()
-        p1b.Maximize(placed_sum)
+        p1b.Add(strict == 0)
+        p1b.Maximize(placed_sum * W_VIOL - sum(viol) if viol else placed_sum)
         phase['text'] = _('STEP1B')
-        st1b, sv1b = run(p1b, seconds * 0.3, False)
+        st1b, sv1b = run(p1b, seconds * 0.4, False)
         if st1b in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             best_k = int(sv1b.Value(placed_sum))
-            best_val = {v.Index(): sv1b.BooleanValue(v) for (a, ln, xs, p) in units for v in list(xs.values()) + [p]}
+            best_val = vals_of(sv1b)
             status = st1b
+            relaxed = bool(viol)
         elif st1b == cp_model.INFEASIBLE:
             status = st1b
-    # 2ο βήμα: ίδιες (ή περισσότερες) ώρες, με λιγότερα κενά και καλύτερη κατανομή
+    if best_k < total_free or relaxed:
+        n_alts = 1   # όλος ο χρόνος στο καλύτερο πρόγραμμα
+    # 2ο βήμα: ίδιες ώρες, με λιγότερα κενά και καλύτερη κατανομή
     solver = None
     if best_val is not None and not (stopper and stopper()):
         p2 = m.Clone()
         p2.Add(placed_sum >= best_k)
         hint_from(p2, lambda v: best_val[v.Index()])
-        if soft:
-            p2.Minimize(sum(soft))
+        if relaxed:
+            p2.Add(strict == 0)
+            p2.Minimize(W_VIOL * sum(viol) + sum(soft))
+        else:
+            p2.Add(strict == 1)
+            if soft:
+                p2.Minimize(sum(soft))
         phase['text'] = _('STEP2')
-        st2, sv2 = run(p2, max(2.0, seconds - (time.time() - t0)), bool(soft))
+        # με εναλλακτικά: η καλύτερη λύση ως το 55% του χρόνου, το υπόλοιπο για τα εναλλακτικά
+        main_end = seconds * (0.55 if n_alts > 1 else 1.0)
+        st2, sv2 = run(p2, max(2.0, main_end - (time.time() - t0)), bool(soft) or relaxed)
         if st2 in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             solver, status = sv2, st2
     if solver is None and best_val is not None:
@@ -834,6 +875,7 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
                 tids = sorted({a['t'] for (a, ln, xs, p) in units})
                 free_t = set(rng.sample(tids, max(2, int(len(tids) * min(0.9, 0.35 + 0.1 * tries)))))
                 pa = m.Clone()
+                pa.Add(strict == 1)
                 pa.Add(placed_sum >= placed_main)
                 for (a, ln, xs, p) in units:
                     if a['t'] in free_t:
@@ -876,7 +918,7 @@ def solve(data, seconds=30, keep_placed=False, progress=None, stopper=None):
             elapsed = time.time() - t0
         return {'ok': True, 'engine': 'OR-Tools', 'schedule': schedule_from(solver.BooleanValue), 'seconds': elapsed,
                 'optimal': status == cp_model.OPTIMAL, 'alternatives': alternatives,
-                'summary': {'hard': 0, 'soft': int(solver.ObjectiveValue()) if soft else 0, 'missing': sum(u['len'] for u in unplaceable)},
+                'summary': {'hard': (sum(int(solver.Value(x)) for x in viol) if relaxed and hasattr(solver, 'Value') else 0), 'soft': int(solver.ObjectiveValue()) if soft else 0, 'missing': sum(u['len'] for u in unplaceable)},
                 'unplaceable': unplaceable, 'messages': msgs}
     if status == cp_model.INFEASIBLE:
         return {'ok': False, 'message': _('INFEAS')}
