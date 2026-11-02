@@ -228,9 +228,14 @@ def run_app():
     def adopt_legacy():
         # Παλιές εκδόσεις (ένα σχολείο): Έγγραφα\Ωρολόγιο\data.json → γίνεται το πρώτο σχολείο της λίστας.
         # Τα παλιά αρχεία ΔΕΝ σβήνονται· αντιγράφονται στον φάκελο του σχολείου.
+        # ή: αρχικά-δεδομένα.json δίπλα στην εφαρμογή (πακέτο με έτοιμο σχολείο) → πρώτο σχολείο
         old = os.path.join(data_dir, 'data.json')
-        if os.path.exists(registry) or not os.path.exists(old):
+        if os.path.exists(registry):
             return
+        if not os.path.exists(old):
+            old = os.path.join(APP_DIR, 'αρχικά-δεδομένα.json')
+            if not os.path.exists(old):
+                return
         try:
             import shutil
             with open(old, encoding='utf-8') as f:
@@ -240,7 +245,7 @@ def run_app():
             dst = os.path.join(schools_root, sid)
             os.makedirs(dst, exist_ok=True)
             shutil.copy2(old, os.path.join(dst, 'data.json'))
-            for sub in ('αντίγραφα', 'εκτυπώσεις'):
+            for sub in ('αντίγραφα', 'εκτυπώσεις') if os.path.dirname(old) == data_dir else ():
                 src = os.path.join(data_dir, sub)
                 if os.path.isdir(src) and not os.path.exists(os.path.join(dst, sub)):
                     shutil.copytree(src, os.path.join(dst, sub))
